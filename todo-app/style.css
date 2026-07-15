@@ -22,6 +22,9 @@
   --color-divider-soft: rgba(0, 0, 0, 0.04);
   --color-hairline: #e0e0e0;
 
+  /* System red — 지연(마감 초과) 신호 전용 */
+  --color-danger: #ff3b30;
+
   /* Radius */
   --radius-xs: 5px;
   --radius-sm: 8px;
@@ -111,10 +114,27 @@ body {
 }
 
 .todo-form input,
-.todo-form select {
+.todo-form select,
+.todo-form textarea {
   font-family: var(--font-text);
   color: var(--color-ink);
   outline: none;
+}
+
+.todo-form textarea {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  line-height: 1.43;
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+
+.todo-form textarea:focus {
+  border-color: var(--color-primary);
 }
 
 #todo-input {
@@ -475,4 +495,175 @@ body {
 
 .gantt-bar.status-완료 .gantt-bar-fill {
   background: var(--color-ink);
+}
+
+/* ---------- 업무용 확장 ---------- */
+
+.footer-actions {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.project-header {
+  padding: var(--space-md) 4px 6px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  color: var(--color-ink-muted-48);
+  border-bottom: none;
+  list-style: none;
+}
+
+.todo-memo {
+  display: block;
+  font-size: 13px;
+  line-height: 1.43;
+  letter-spacing: -0.224px;
+  color: var(--color-ink-muted-48);
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
+
+.overdue-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.08px;
+  vertical-align: 1px;
+}
+
+.todo-item.overdue .todo-dates {
+  color: var(--color-danger);
+}
+
+.todo-edit {
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-family: var(--font-text);
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.todo-item:hover .todo-edit {
+  opacity: 1;
+}
+
+/* 인라인 수정 폼 */
+
+.todo-item.editing {
+  display: block;
+  padding: var(--space-sm) 4px;
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.edit-form input,
+.edit-form textarea {
+  font-family: var(--font-text);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  outline: none;
+}
+
+.edit-form input:focus,
+.edit-form textarea:focus {
+  border-color: var(--color-primary);
+}
+
+.edit-form textarea {
+  resize: vertical;
+  line-height: 1.43;
+}
+
+.edit-row {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.edit-row input {
+  flex: 1;
+  min-width: 120px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.edit-save,
+.edit-cancel {
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-text);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.edit-save {
+  border: none;
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.edit-save:active,
+.edit-cancel:active {
+  transform: scale(0.95);
+}
+
+.edit-cancel {
+  border: 1px solid var(--color-hairline);
+  background: transparent;
+  color: var(--color-ink-muted-48);
+}
+
+/* 간트 확장 */
+
+.gantt-group {
+  padding-left: 0;
+}
+
+.gantt-header {
+  position: relative;
+}
+
+.gantt-today-label {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.gantt-today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-danger);
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.gantt-bar.overdue {
+  outline: 1.5px solid var(--color-danger);
+  outline-offset: -1.5px;
 }
