@@ -198,6 +198,16 @@ function todayStr() {
   return new Date(d.getTime() - offset).toISOString().slice(0, 10);
 }
 
+function addDays(dateStr, n) {
+  const d = new Date(dateStr);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function diffDays(a, b) {
+  return Math.round((new Date(b) - new Date(a)) / 86400000);
+}
+
 function isOverdue(todo) {
   return todo.status !== "완료" && todo.endDate < todayStr();
 }
@@ -478,9 +488,16 @@ function renderEditItem(todo) {
   return li;
 }
 
-/* ---------- 간트차트 뷰 ---------- */
+/* ---------- 간트차트 뷰 (노션식 드래그 타임라인) ---------- */
+
+const CELL_W = 32;
+let ganttScrollLeft = null;
 
 function renderGantt() {
+  if (currentView === "gantt") {
+    const prev = ganttChart.querySelector(".gantt-scroll");
+    if (prev) ganttScrollLeft = prev.scrollLeft;
+  }
   ganttChart.innerHTML = "";
 
   if (todos.length === 0) {
@@ -492,29 +509,96 @@ function renderGantt() {
   }
 
   const sorted = sortByStart(todos);
-  const dayMs = 24 * 60 * 60 * 1000;
-  const todayMs = new Date(todayStr()).getTime();
-  const starts = sorted.map((t) => new Date(t.startDate).getTime());
-  const ends = sorted.map((t) => new Date(t.endDate).getTime());
-  const minDate = Math.min(...starts, todayMs);
-  const maxDate = Math.max(...ends, todayMs);
-  const totalRange = Math.max(maxDate - minDate, dayMs);
-  const todayPct = ((todayMs - minDate) / totalRange) * 100;
+  const today = todayStr();
+  let minD = today;
+  let maxD = today;
+  sorted.forEach((t) => {
+    if (t.startDate < minD) minD = t.startDate;
+    if (t.endDate > maxD) maxD = t.endDate;
+  });
+  const rangeStart = addDays(minD, -3);
+  const rangeEnd = addDays(maxD, 7);
+  const nDays = diffDays(rangeStart, rangeEnd) + 1;
+  const days = Array.from({ length: nDays }, (_, i) => addDays(rangeStart, i));
+  const gridW = nDays * CELL_W;
 
-  const header = document.createElement("div");
-  header.className = "gantt-header";
-  const startLabel = document.createElement("span");
-  startLabel.textContent = new Date(minDate).toLocaleDateString("ko-KR");
-  const todayLabel = document.createElement("span");
-  todayLabel.className = "gantt-today-label";
-  todayLabel.textContent = "오늘";
-  const endLabel = document.createElement("span");
-  endLabel.textContent = new Date(maxDate).toLocaleDateString("ko-KR");
-  header.appendChild(startLabel);
-  header.appendChild(todayLabel);
-  header.appendChild(endLabel);
-  ganttChart.appendChild(header);
+  // 범례 + 안내
+  const legend = document.createElement("div");
+  legend.className = "gantt-legend";
+  STATUSES.forEach((s) => {
+    const item = document.createElement("span");
+    item.className = "legend-item";
+    const dot = document.createElement("span");
+    dot.className = `legend-dot legend-${s}`;
+    item.appendChild(dot);
+    item.appendChild(document.createTextNode(s));
+    legend.appendChild(item);
+  });
+  const hint = document.createElement("span");
+  hint.className = "gantt-hint";
+  hint.textContent = "막대를 끌면 일정 이동 · 양끝을 끌면 기간 조절";
+  legend.appendChild(hint);
+  ganttChart.appendChild(legend);
 
+  const scroll = document.createElement("div");
+  scroll.className = "gantt-scroll";
+
+  // 월 헤더
+  const monthRow = document.createElement("div");
+  monthRow.className = "gantt-grid-row gantt-month-row";
+  const mCorner = document.createElement("div");
+  mCorner.className = "gantt-sticky-label gantt-corner";
+  monthRow.appendChild(mCorner);
+  const months = document.createElement("div");
+  months.className = "gantt-cells";
+  months.style.width = `${gridW}px`;
+  let i = 0;
+  while (i < nDays) {
+    const d = new Date(days[i]);
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth();
+    let j = i;
+    while (j < nDays) {
+      const dj = new Date(days[j]);
+      if (dj.getUTCFullYear() !== y || dj.getUTCMonth() !== m) break;
+      j++;
+    }
+    const seg = document.createElement("div");
+    seg.className = "gantt-month";
+    seg.style.left = `${i * CELL_W}px`;
+    seg.style.width = `${(j - i) * CELL_W}px`;
+    seg.textContent = `${y}년 ${m + 1}월`;
+    months.appendChild(seg);
+    i = j;
+  }
+  monthRow.appendChild(months);
+  scroll.appendChild(monthRow);
+
+  // 일 헤더
+  const dayRow = document.createElement("div");
+  dayRow.className = "gantt-grid-row gantt-day-row";
+  const dCorner = document.createElement("div");
+  dCorner.className = "gantt-sticky-label gantt-corner";
+  dayRow.appendChild(dCorner);
+  const dayCells = document.createElement("div");
+  dayCells.className = "gantt-cells";
+  dayCells.style.width = `${gridW}px`;
+  days.forEach((ds, idx) => {
+    const d = new Date(ds);
+    const dow = d.getUTCDay();
+    const cell = document.createElement("div");
+    cell.className =
+      "gantt-day" +
+      (dow === 0 || dow === 6 ? " weekend" : "") +
+      (ds === today ? " today" : "");
+    cell.style.left = `${idx * CELL_W}px`;
+    cell.textContent = d.getUTCDate();
+    dayCells.appendChild(cell);
+  });
+  dayRow.appendChild(dayCells);
+  scroll.appendChild(dayRow);
+
+  // 프로젝트 그룹
   const projects = getProjects();
   const useGroups = projects.length > 0;
   const groups = new Map();
@@ -526,51 +610,149 @@ function renderGantt() {
 
   groups.forEach((items, groupName) => {
     if (groupName) {
-      const gh = document.createElement("div");
-      gh.className = "project-header gantt-group";
-      gh.textContent = groupName;
-      ganttChart.appendChild(gh);
+      const gr = document.createElement("div");
+      gr.className = "gantt-grid-row gantt-group-row";
+      const gl = document.createElement("div");
+      gl.className = "gantt-sticky-label gantt-group-label";
+      gl.textContent = groupName;
+      gr.appendChild(gl);
+      const gc = document.createElement("div");
+      gc.className = "gantt-cells";
+      gc.style.width = `${gridW}px`;
+      gr.appendChild(gc);
+      scroll.appendChild(gr);
     }
+
     items.forEach((todo) => {
       const row = document.createElement("div");
-      row.className = "gantt-row";
+      row.className = "gantt-grid-row gantt-task-row";
 
       const label = document.createElement("div");
-      label.className = "gantt-label";
+      label.className = "gantt-sticky-label";
       label.textContent = todo.text;
       label.title = todo.memo ? `${todo.text}\n${todo.memo}` : todo.text;
+      row.appendChild(label);
 
-      const track = document.createElement("div");
-      track.className = "gantt-track";
+      const cells = document.createElement("div");
+      cells.className = "gantt-cells";
+      cells.style.width = `${gridW}px`;
 
-      const taskStart = new Date(todo.startDate).getTime();
-      const taskEnd = new Date(todo.endDate).getTime();
-      const leftPct = ((taskStart - minDate) / totalRange) * 100;
-      const widthPct = Math.max(((taskEnd - taskStart) / totalRange) * 100, 2);
+      days.forEach((ds, idx) => {
+        const dow = new Date(ds).getUTCDay();
+        const c = document.createElement("div");
+        c.className =
+          "gantt-cell" +
+          (dow === 0 || dow === 6 ? " weekend" : "") +
+          (ds === today ? " today" : "");
+        c.style.left = `${idx * CELL_W}px`;
+        cells.appendChild(c);
+      });
 
+      const startIdx = diffDays(rangeStart, todo.startDate);
+      const dur = diffDays(todo.startDate, todo.endDate) + 1;
       const bar = document.createElement("div");
       bar.className =
         `gantt-bar status-${todo.status}` + (isOverdue(todo) ? " overdue" : "");
-      bar.style.left = `${leftPct}%`;
-      bar.style.width = `${widthPct}%`;
-      bar.title = `${todo.text} (${todo.status}${isOverdue(todo) ? " · 지연" : ""})`;
+      bar.style.left = `${startIdx * CELL_W}px`;
+      bar.style.width = `${dur * CELL_W}px`;
+      bar.title = `${todo.text} · ${todo.startDate} ~ ${todo.endDate} (${todo.status})`;
 
-      const fill = document.createElement("div");
-      fill.className = "gantt-bar-fill";
-      fill.style.width = `${STATUS_PROGRESS[todo.status]}%`;
-      bar.appendChild(fill);
+      const hl = document.createElement("div");
+      hl.className = "gantt-handle left";
+      const hr = document.createElement("div");
+      hr.className = "gantt-handle right";
+      bar.appendChild(hl);
+      bar.appendChild(hr);
 
-      const todayLine = document.createElement("div");
-      todayLine.className = "gantt-today-line";
-      todayLine.style.left = `${todayPct}%`;
-
-      track.appendChild(bar);
-      track.appendChild(todayLine);
-      row.appendChild(label);
-      row.appendChild(track);
-      ganttChart.appendChild(row);
+      attachBarDrag(bar, todo, rangeStart, rangeEnd);
+      cells.appendChild(bar);
+      row.appendChild(cells);
+      scroll.appendChild(row);
     });
   });
+
+  ganttChart.appendChild(scroll);
+
+  if (currentView === "gantt") {
+    scroll.scrollLeft =
+      ganttScrollLeft !== null
+        ? ganttScrollLeft
+        : Math.max(0, (diffDays(rangeStart, today) - 3) * CELL_W);
+  }
+}
+
+function attachBarDrag(bar, todo, rangeStart, rangeEnd) {
+  let mode = null;
+  let startX = 0;
+  let origStart = null;
+  let origEnd = null;
+  let pendingStart = null;
+  let pendingEnd = null;
+
+  bar.addEventListener("pointerdown", (e) => {
+    mode = e.target.classList.contains("gantt-handle")
+      ? e.target.classList.contains("left")
+        ? "l"
+        : "r"
+      : "m";
+    startX = e.clientX;
+    origStart = todo.startDate;
+    origEnd = todo.endDate;
+    pendingStart = origStart;
+    pendingEnd = origEnd;
+    bar.setPointerCapture(e.pointerId);
+    bar.classList.add("dragging");
+    e.preventDefault();
+  });
+
+  bar.addEventListener("pointermove", (e) => {
+    if (!mode) return;
+    let delta = Math.round((e.clientX - startX) / CELL_W);
+
+    if (mode !== "r") {
+      const minDelta = diffDays(origStart, rangeStart);
+      if (delta < minDelta) delta = minDelta;
+    }
+    if (mode !== "l") {
+      const maxDelta = diffDays(origEnd, rangeEnd);
+      if (delta > maxDelta) delta = maxDelta;
+    }
+
+    let ns = origStart;
+    let ne = origEnd;
+    if (mode === "m") {
+      ns = addDays(origStart, delta);
+      ne = addDays(origEnd, delta);
+    } else if (mode === "l") {
+      ns = addDays(origStart, delta);
+      if (ns > ne) ns = ne;
+    } else {
+      ne = addDays(origEnd, delta);
+      if (ne < ns) ne = ns;
+    }
+    pendingStart = ns;
+    pendingEnd = ne;
+
+    bar.style.left = `${diffDays(rangeStart, ns) * CELL_W}px`;
+    bar.style.width = `${(diffDays(ns, ne) + 1) * CELL_W}px`;
+    bar.title = `${todo.text} · ${ns} ~ ${ne}`;
+  });
+
+  const finish = (e) => {
+    if (!mode) return;
+    bar.classList.remove("dragging");
+    try {
+      bar.releasePointerCapture(e.pointerId);
+    } catch {}
+    const changed = pendingStart !== origStart || pendingEnd !== origEnd;
+    mode = null;
+    if (changed) {
+      updateTodo(todo.id, { startDate: pendingStart, endDate: pendingEnd });
+    }
+  };
+
+  bar.addEventListener("pointerup", finish);
+  bar.addEventListener("pointercancel", finish);
 }
 
 /* ---------- 백업 ---------- */
@@ -655,6 +837,7 @@ viewTabs.forEach((tab) => {
     currentView = tab.dataset.view;
     listView.classList.toggle("hidden", currentView !== "list");
     ganttView.classList.toggle("hidden", currentView !== "gantt");
+    if (currentView === "gantt") renderGantt();
   });
 });
 
