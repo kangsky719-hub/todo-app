@@ -2,7 +2,16 @@ const STORAGE_KEY = "todos";
 const STATUSES = ["예정", "진행중", "완료"];
 const STATUS_PROGRESS = { 예정: 0, 진행중: 50, 완료: 100 };
 
-let todos = loadTodos();
+/* ---------- Supabase ---------- */
+
+const SUPABASE_URL = "https://spbdgzttmkawxkhferxb.supabase.co";
+const SUPABASE_KEY = "sb_publishable_uFai1IUvgUWTYmQ9AwHuYw_CTUrMjYt";
+const sb = window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
+
+let session = null;
+let todos = [];
 let currentFilter = "all";
 let currentView = "list";
 let editingId = null;
@@ -28,15 +37,20 @@ const ganttView = document.getElementById("gantt-view");
 const ganttChart = document.getElementById("gantt-chart");
 const dateEl = document.getElementById("date");
 
-function loadTodos() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  const parsed = raw ? JSON.parse(raw) : [];
-  return parsed.map((t) => normalizeTodo(t));
-}
+const authEmail = document.getElementById("auth-email");
+const authPassword = document.getElementById("auth-password");
+const loginBtn = document.getElementById("login-btn");
+const signupBtn = document.getElementById("signup-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const authLoggedOut = document.getElementById("auth-logged-out");
+const authLoggedIn = document.getElementById("auth-logged-in");
+const authUser = document.getElementById("auth-user");
+
+/* ---------- 데이터 유틸 ---------- */
 
 function normalizeTodo(t) {
   return {
-    id: t.id || Date.now() + Math.random(),
+    id: t.id || Date.now() + Math.floor(Math.random() * 1000),
     text: t.text || "",
     memo: t.memo || "",
     project: t.project || "",
@@ -46,9 +60,137 @@ function normalizeTodo(t) {
   };
 }
 
-function saveTodos() {
+function fromRow(r) {
+  return {
+    id: r.id,
+    text: r.text,
+    memo: r.memo || "",
+    project: r.project || "",
+    startDate: r.start_date,
+    endDate: r.end_date,
+    status: r.status,
+  };
+}
+
+function toRow(t) {
+  return {
+    id: t.id,
+    text: t.text,
+    memo: t.memo,
+    project: t.project,
+    start_date: t.startDate,
+    end_date: t.endDate,
+    status: t.status,
+  };
+}
+
+function loadLocal() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const parsed = raw ? JSON.parse(raw) : [];
+  return parsed.map(normalizeTodo);
+}
+
+function saveLocal() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
 }
+
+function cloudError(error, action) {
+  console.error(action, error);
+  alert(`클라우드 ${action} 중 오류가 발생했습니다: ${error.message}`);
+}
+
+async function cloudLoad() {
+  const { data, error } = await sb.from("todos").select("*");
+  if (error) {
+    cloudError(error, "불러오기");
+    return null;
+  }
+  return data.map(fromRow);
+}
+
+async function cloudInsert(todo) {
+  const { error } = await sb.from("todos").insert(toRow(todo));
+  if (error) cloudError(error, "저장");
+}
+
+async function cloudUpdate(todo) {
+  const { error } = await sb.from("todos").update(toRow(todo)).eq("id", todo.id);
+  if (error) cloudError(error, "수정");
+}
+
+async function cloudDelete(id) {
+  const { error } = await sb.from("todos").delete().eq("id", id);
+  if (error) cloudError(error, "삭제");
+}
+
+async function cloudReplaceAll(items) {
+  const { error: delErr } = await sb.from("todos").delete().neq("id", -1);
+  if (delErr) return cloudError(delErr, "교체(삭제)");
+  if (items.length) {
+    const { error: insErr } = await sb.from("todos").insert(items.map(toRow));
+    if (insErr) cloudError(insErr, "교체(저장)");
+  }
+}
+
+function persist() {
+  saveLocal();
+}
+
+/* ---------- 인증 ---------- */
+
+function updateAuthUI() {
+  const loggedIn = !!session;
+  authLoggedOut.classList.toggle("hidden", loggedIn);
+  authLoggedIn.classList.toggle("hidden", !loggedIn);
+  if (loggedIn) authUser.textContent = session.user.email;
+}
+
+async function initData() {
+  if (session && sb) {
+    const cloud = await cloudLoad();
+    if (cloud === null) return;
+    const local = loadLocal();
+    if (cloud.length === 0 && local.length > 0) {
+      if (confirm(`이 브라우저에 저장된 ${local.length}개 항목을 클라우드로 업로드할까요?`)) {
+        todos = local;
+        await cloudReplaceAll(local);
+      } else {
+        todos = [];
+      }
+    } else {
+      todos = cloud;
+    }
+    saveLocal();
+  } else {
+    todos = loadLocal();
+  }
+  render();
+}
+
+async function login() {
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+  if (!email || !password) return alert("이메일과 비밀번호를 입력해주세요.");
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) alert(`로그인 실패: ${error.message}`);
+}
+
+async function signup() {
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+  if (!email || !password) return alert("이메일과 비밀번호를 입력해주세요.");
+  if (password.length < 6) return alert("비밀번호는 6자 이상이어야 합니다.");
+  const { data, error } = await sb.auth.signUp({ email, password });
+  if (error) return alert(`회원가입 실패: ${error.message}`);
+  if (data.session) return; // 이메일 확인 꺼져 있으면 바로 로그인됨
+  alert("확인 이메일을 보냈습니다. 메일함에서 인증 후 로그인해주세요.");
+}
+
+async function logout() {
+  await sb.auth.signOut();
+}
+
+/* ---------- 공통 유틸 ---------- */
 
 function todayStr() {
   const d = new Date();
@@ -90,15 +232,17 @@ function updateProjectDatalist() {
   });
 }
 
+/* ---------- 데이터 조작 ---------- */
+
 function addTodo(data) {
-  todos.push(
-    normalizeTodo({
-      id: Date.now(),
-      ...data,
-      endDate: data.endDate < data.startDate ? data.startDate : data.endDate,
-    })
-  );
-  saveTodos();
+  const todo = normalizeTodo({
+    id: Date.now(),
+    ...data,
+    endDate: data.endDate < data.startDate ? data.startDate : data.endDate,
+  });
+  todos.push(todo);
+  persist();
+  if (session) cloudInsert(todo);
   render();
 }
 
@@ -110,26 +254,32 @@ function updateTodo(id, data) {
     ...data,
     endDate: data.endDate < data.startDate ? data.startDate : data.endDate,
   });
-  saveTodos();
+  persist();
+  if (session) cloudUpdate(todos[idx]);
   render();
 }
 
 function setStatus(id, status) {
   const todo = todos.find((t) => t.id === id);
-  if (todo) todo.status = status;
-  saveTodos();
+  if (!todo) return;
+  todo.status = status;
+  persist();
+  if (session) cloudUpdate(todo);
   render();
 }
 
 function deleteTodo(id) {
   todos = todos.filter((t) => t.id !== id);
-  saveTodos();
+  persist();
+  if (session) cloudDelete(id);
   render();
 }
 
 function clearCompleted() {
+  const removed = todos.filter((t) => t.status === "완료");
   todos = todos.filter((t) => t.status !== "완료");
-  saveTodos();
+  persist();
+  if (session) removed.forEach((t) => cloudDelete(t.id));
   render();
 }
 
@@ -449,7 +599,8 @@ function importTodos(file) {
       )
         return;
       todos = data.map(normalizeTodo);
-      saveTodos();
+      persist();
+      if (session) cloudReplaceAll(todos);
       render();
     } catch {
       alert("올바른 백업 파일이 아닙니다.");
@@ -507,7 +658,24 @@ viewTabs.forEach((tab) => {
   });
 });
 
+if (sb) {
+  loginBtn.addEventListener("click", login);
+  signupBtn.addEventListener("click", signup);
+  logoutBtn.addEventListener("click", logout);
+  authPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") login();
+  });
+  sb.auth.onAuthStateChange((_event, sess) => {
+    const changed = (sess?.user?.id || null) !== (session?.user?.id || null);
+    session = sess;
+    updateAuthUI();
+    if (changed) initData();
+  });
+} else {
+  document.getElementById("auth-bar").classList.add("hidden");
+}
+
 startInput.value = todayStr();
 endInput.value = todayStr();
 setDate();
-render();
+initData();

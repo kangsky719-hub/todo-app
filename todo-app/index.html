@@ -16,6 +16,21 @@
       <p class="date" id="date"></p>
     </header>
 
+    <div id="auth-bar" class="auth-bar">
+      <div id="auth-logged-out">
+        <input type="email" id="auth-email" placeholder="이메일" autocomplete="username" />
+        <input type="password" id="auth-password" placeholder="비밀번호" autocomplete="current-password" />
+        <button id="login-btn" type="button">로그인</button>
+        <button id="signup-btn" type="button">회원가입</button>
+        <span class="auth-hint">로그인하면 어느 기기에서든 같은 데이터를 볼 수 있어요 (지금은 이 브라우저에만 저장 중)</span>
+      </div>
+      <div id="auth-logged-in" class="hidden">
+        <span id="auth-user"></span>
+        <span class="auth-status">클라우드 동기화 중</span>
+        <button id="logout-btn" type="button">로그아웃</button>
+      </div>
+    </div>
+
     <form id="todo-form" class="todo-form">
       <input
         type="text"
@@ -82,6 +97,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
