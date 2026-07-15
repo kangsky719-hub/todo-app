@@ -1,9 +1,9 @@
 # 업무 진행 관리 웹앱 (todo-app)
 
 ## 프로젝트 개요
-- 사용자(강지윤, 코딩 입문자)가 회사 업무 관리용으로 만든 첫 웹앱
-- 할 일 목록 + 간트차트 뷰, 상태(예정/진행중/완료) 관리, 프로젝트별 그룹핑
-- 순수 HTML/CSS/JS (프레임워크 없음), `todo-app/` 폴더에 3개 파일
+- 사용자(강지윤, 코딩 입문자)가 Claude Code로 만든 첫 웹앱. 회사 업무 관리용으로 실사용 중
+- 할 일 목록 + 노션식 드래그 타임라인(간트차트), 상태(예정/진행중/완료) 관리, 프로젝트별 그룹핑
+- 순수 HTML/CSS/JS (프레임워크 없음), `todo-app/` 폴더에 index.html / style.css / script.js 3개 파일
 
 ## 배포 & 저장소
 - **실서비스 URL**: https://whimsical-belekoy-13392c.netlify.app
@@ -12,32 +12,62 @@
 - 로컬 실행: `python -m http.server 8080 --directory todo-app` (`.claude/launch.json`에 "todo-app" 설정 있음)
 
 ## 데이터 저장 구조
-- **로컬**: localStorage (`todos` 키) — 항상 캐시로 유지
-- **클라우드**: Supabase (프로젝트 ID: spbdgzttmkawxkhferxb, 리전 ap-southeast-1)
-  - 이메일/비밀번호 로그인 시 `public.todos` 테이블과 동기화, RLS로 본인(user_id) 데이터만 접근
+- **로컬**: localStorage (`todos` 키) — 항상 캐시로 유지, 비로그인 시 유일한 저장소
+- **클라우드**: Supabase (프로젝트 ID: spbdgzttmkawxkhferxb, 리전 ap-southeast-1) — 연동 완료, 작동 확인됨
+  - 이메일/비밀번호 로그인(사용자 계정: kangsky719@gmail.com) 시 `public.todos` 테이블과 동기화
+  - RLS 정책 적용: 본인(user_id = auth.uid()) 데이터만 select/insert/update/delete 가능
   - anon(publishable) 키는 script.js에 하드코딩 — 공개용 키라 안전
-  - 테이블 스키마: id(bigint PK), user_id(uuid, default auth.uid()), text, memo, project, start_date, end_date, status
-- 백업: 푸터의 내보내기/가져오기(JSON)
+  - 테이블 스키마: id(bigint PK), user_id(uuid, default auth.uid(), cascade delete), text, memo, project, start_date(date), end_date(date), status(text)
+  - 로그인 시 클라우드가 비어 있고 로컬에 데이터가 있으면 업로드 여부를 confirm으로 물음
+- 백업: 푸터의 내보내기/가져오기(JSON 파일)
+
+## 주요 기능 (구현 완료)
+1. **목록 뷰**: 추가(제목/프로젝트/시작일/종료일/상태/메모), 인라인 수정, 삭제, 상태 드롭다운, 필터(전체/예정/진행중/완료/지연), 시작일순 정렬, 프로젝트별 그룹 헤더, 지연 배지(빨강)
+2. **간트차트 뷰 (노션식 타임라인)**:
+   - 일자별 32px 칸 그리드(CELL_W=32), 월/일 헤더, 주말 음영, 오늘 빨간 원 표시
+   - 상태별 색 막대: 회색=예정, 파랑=진행중, 검정(반투명)=완료, 지연=빨간 테두리
+   - **드래그로 일정 이동** (막대 가운데), **양끝 핸들로 기간 조절** — pointer 이벤트, 터치 지원
+   - 왼쪽 업무명 컬럼 sticky 고정, 날짜 영역만 가로 스크롤, 첫 진입 시 오늘 근처로 자동 스크롤
+   - 드래그 완료 시 updateTodo → localStorage + (로그인 시) Supabase 동기화
+3. **인증 바**: 이메일/비밀번호 로그인·회원가입·로그아웃 (supabase-js v2 CDN)
 
 ## 디자인 시스템
-- Apple 디자인 시스템(awesome-design-md의 DESIGN.md)을 토큰으로 적용
+- Apple 디자인 시스템(VoltAgent/awesome-design-md의 Apple DESIGN.md)을 CSS 변수 토큰으로 적용
 - 핵심 규칙: 단일 액센트 Action Blue(#0066cc), 본문 17px, 헤드라인 weight 600 + 음수 자간,
-  카드에 그림자 금지(헤어라인 보더만), pill 라운딩은 액션 요소 전용
-- 예외적으로 지연(마감 초과) 신호에만 시스템 레드(#ff3b30) 사용
+  카드에 그림자 금지(헤어라인 보더만), pill 라운딩(9999px)은 액션 요소 전용, 유틸리티는 8px
+- 예외: 지연(마감 초과) 신호에만 시스템 레드(#ff3b30, --color-danger) 사용
+- 폰트: SF Pro 스택 + Inter(Google Fonts) 폴백
 - 라이트/다크 모드 자동 대응 (prefers-color-scheme)
 
 ## 데이터 모델 (JS)
 ```js
 { id, text, memo, project, startDate, endDate, status } // status: 예정|진행중|완료
 ```
-DB는 snake_case (start_date, end_date) — script.js의 fromRow/toRow에서 변환
+- DB는 snake_case (start_date, end_date) — script.js의 fromRow/toRow에서 변환
+- 날짜는 전부 "YYYY-MM-DD" 문자열, 헬퍼: todayStr(), addDays(), diffDays() (UTC 기준 연산)
+- 지연 판정: status !== "완료" && endDate < todayStr()
 
 ## 작업 방식 (사용자 선호)
-- 사용자는 코딩 완전 초보 — 설명은 쉽게, 전문용어는 풀어서
+- 사용자는 코딩 완전 초보 — 설명은 쉽게, 전문용어는 풀어서, 한국어로 대화
 - 수정 → git commit/push → Netlify 자동 배포 → 브라우저로 실배포 확인까지가 한 사이클
-- git 커밋 identity: 강지윤 / kangsky719@gmail.com (로컬 설정됨)
+- 배포 확인은 `curl`로 새 코드 폴링 후 브라우저 접속으로 검증
+- git 커밋 identity: 강지윤 / kangsky719@gmail.com (이 저장소에 로컬 설정됨)
+- 계정 생성·로그인·결제 등은 사용자가 직접 수행 (Netlify/Supabase/GitHub 계정 모두 사용자 소유)
+
+## 히스토리 요약 (2026-07-15 세션)
+1. 기본 할 일 앱 생성 → GitHub(kangsky719-hub/todo-app) + Netlify 배포 파이프라인 구축
+2. 상태(예정/진행중/완료) + 간트차트 기능 추가
+3. Apple 디자인 시스템 토큰 적용 (전면 리스타일)
+4. 업무용 기능 확장: 인라인 수정, 메모, 프로젝트 그룹, JSON 백업, 지연 표시, 오늘 기준선
+5. Supabase 클라우드 동기화 + 이메일 인증 (사용자가 SQL Editor에서 테이블/RLS 생성 완료)
+6. 간트차트를 노션식 드래그 타임라인으로 교체 (일자 칸 그리드, 드래그 이동/기간 조절)
 
 ## 다음에 할 만한 것 (미완료 아이디어)
-- 간트차트 날짜 눈금 세분화
+- 간트 칸 크기/줌 조절, 막대에 업무명 표시
 - 마감 임박 알림
 - 담당자 필드 (팀 공유 시)
+- 모바일 레이아웃 최적화
+
+## 알려진 사항
+- 스크린샷 도구가 간헐적으로 타임아웃 — DOM/JS 검증으로 대체 가능
+- Supabase 무료 플랜: 1주일 미사용 시 프로젝트 일시정지될 수 있음 (대시보드에서 재개 가능)
