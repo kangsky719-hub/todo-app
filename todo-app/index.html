@@ -9,7 +9,7 @@
 <body>
   <div class="app">
     <header class="app-header">
-      <h1>오늘의 할 일</h1>
+      <h1>업무 진행 관리</h1>
       <p class="date" id="date"></p>
     </header>
 
@@ -20,21 +20,51 @@
         placeholder="할 일을 입력하세요"
         autocomplete="off"
       />
+      <div class="date-row">
+        <label>
+          시작일
+          <input type="date" id="start-input" required />
+        </label>
+        <label>
+          종료일
+          <input type="date" id="end-input" required />
+        </label>
+        <label>
+          상태
+          <select id="status-input">
+            <option value="예정">예정</option>
+            <option value="진행중">진행중</option>
+            <option value="완료">완료</option>
+          </select>
+        </label>
+      </div>
       <button type="submit">추가</button>
     </form>
 
-    <div class="filters">
-      <button class="filter-btn active" data-filter="all">전체</button>
-      <button class="filter-btn" data-filter="active">진행중</button>
-      <button class="filter-btn" data-filter="completed">완료</button>
+    <div class="view-tabs">
+      <button class="view-tab active" data-view="list">목록</button>
+      <button class="view-tab" data-view="gantt">간트차트</button>
     </div>
 
-    <ul id="todo-list" class="todo-list"></ul>
+    <div id="list-view" class="view">
+      <div class="filters">
+        <button class="filter-btn active" data-filter="all">전체</button>
+        <button class="filter-btn" data-filter="예정">예정</button>
+        <button class="filter-btn" data-filter="진행중">진행중</button>
+        <button class="filter-btn" data-filter="완료">완료</button>
+      </div>
 
-    <footer class="app-footer">
-      <span id="items-left">0개 남음</span>
-      <button id="clear-completed">완료된 항목 삭제</button>
-    </footer>
+      <ul id="todo-list" class="todo-list"></ul>
+
+      <footer class="app-footer">
+        <span id="items-left">0개 남음</span>
+        <button id="clear-completed">완료된 항목 삭제</button>
+      </footer>
+    </div>
+
+    <div id="gantt-view" class="view hidden">
+      <div id="gantt-chart" class="gantt-chart"></div>
+    </div>
   </div>
 
   <script src="script.js"></script>
