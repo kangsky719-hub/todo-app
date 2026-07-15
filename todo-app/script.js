@@ -103,7 +103,7 @@ function renderList() {
   } else {
     filtered.forEach((todo) => {
       const li = document.createElement("li");
-      li.className = "todo-item" + (todo.status === "완료" ? " completed" : "");
+      li.className = `todo-item status-${todo.status}` + (todo.status === "완료" ? " completed" : "");
 
       const main = document.createElement("div");
       main.className = "todo-main";
@@ -120,7 +120,7 @@ function renderList() {
       main.appendChild(dates);
 
       const statusSelect = document.createElement("select");
-      statusSelect.className = "status-select";
+      statusSelect.className = `status-select status-select-${todo.status}`;
       STATUSES.forEach((s) => {
         const opt = document.createElement("option");
         opt.value = s;
