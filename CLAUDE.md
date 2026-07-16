@@ -29,7 +29,9 @@
    - **드래그로 일정 이동** (막대 가운데), **양끝 핸들로 기간 조절** — pointer 이벤트, 터치 지원
    - 왼쪽 업무명 컬럼 sticky 고정, 날짜 영역만 가로 스크롤, 첫 진입 시 오늘 근처로 자동 스크롤
    - 드래그 완료 시 updateTodo → localStorage + (로그인 시) Supabase 동기화
-3. **인증 바**: 이메일/비밀번호 로그인·회원가입·로그아웃 (supabase-js v2 CDN)
+3. **보드 뷰 (노션식 칸반)**: 예정/진행중/완료 3열, 카드 블럭을 드래그해서 다른 열에 놓으면 상태 변경 (pointer 이벤트, elementFromPoint로 드롭 대상 판정, 터치 지원)
+4. **인증 바**: 이메일/비밀번호 로그인·회원가입·로그아웃 (supabase-js v2 CDN), 동기화 상태/오류가 sync-status에 항상 표시됨
+5. **캐시 버스팅**: index.html에서 `style.css?v=N`, `script.js?v=N` — **파일 수정 시 반드시 v 번호를 올려야 함** (현재 v=8). netlify.toml에 no-cache 헤더 설정됨
 
 ## 디자인 시스템
 - Apple 디자인 시스템(VoltAgent/awesome-design-md의 Apple DESIGN.md)을 CSS 변수 토큰으로 적용
