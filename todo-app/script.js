@@ -94,9 +94,25 @@ function saveLocal() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
 }
 
+const syncStatus = document.getElementById("sync-status");
+
+function setSync(msg, isError) {
+  if (!syncStatus) return;
+  syncStatus.textContent = msg;
+  syncStatus.classList.toggle("sync-error", !!isError);
+}
+
+function syncOk() {
+  const t = new Date().toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  setSync(`동기화됨 · ${t}`);
+}
+
 function cloudError(error, action) {
   console.error(action, error);
-  alert(`클라우드 ${action} 중 오류가 발생했습니다: ${error.message}`);
+  setSync(`${action} 실패: ${error.message}`, true);
 }
 
 async function cloudLoad() {
@@ -111,16 +127,19 @@ async function cloudLoad() {
 async function cloudInsert(todo) {
   const { error } = await sb.from("todos").insert(toRow(todo));
   if (error) cloudError(error, "저장");
+  else syncOk();
 }
 
 async function cloudUpdate(todo) {
   const { error } = await sb.from("todos").update(toRow(todo)).eq("id", todo.id);
   if (error) cloudError(error, "수정");
+  else syncOk();
 }
 
 async function cloudDelete(id) {
   const { error } = await sb.from("todos").delete().eq("id", id);
   if (error) cloudError(error, "삭제");
+  else syncOk();
 }
 
 async function cloudReplaceAll(items) {
@@ -128,8 +147,9 @@ async function cloudReplaceAll(items) {
   if (delErr) return cloudError(delErr, "교체(삭제)");
   if (items.length) {
     const { error: insErr } = await sb.from("todos").insert(items.map(toRow));
-    if (insErr) cloudError(insErr, "교체(저장)");
+    if (insErr) return cloudError(insErr, "교체(저장)");
   }
+  syncOk();
 }
 
 function persist() {
@@ -145,21 +165,36 @@ function updateAuthUI() {
   if (loggedIn) authUser.textContent = session.user.email;
 }
 
+let loadingCloud = false;
+const pendingAdds = new Set();
+
 async function initData() {
   if (session && sb) {
+    loadingCloud = true;
+    setSync("클라우드에서 불러오는 중…");
     const cloud = await cloudLoad();
-    if (cloud === null) return;
+    loadingCloud = false;
+    if (cloud === null) {
+      todos = loadLocal();
+      render();
+      return;
+    }
     const local = loadLocal();
     if (cloud.length === 0 && local.length > 0) {
-      if (confirm(`이 브라우저에 저장된 ${local.length}개 항목을 클라우드로 업로드할까요?`)) {
-        todos = local;
-        await cloudReplaceAll(local);
-      } else {
-        todos = [];
-      }
+      // 클라우드가 비어 있고 이 브라우저에 데이터가 있으면 자동 업로드 (내 데이터이므로 안전)
+      todos = local;
+      await cloudReplaceAll(local);
     } else {
-      todos = cloud;
+      // 클라우드를 기준으로 하되, 불러오는 사이에 화면에서 추가한 항목은 유지 + 업로드
+      const cloudIds = new Set(cloud.map((t) => t.id));
+      const pendingNew = todos.filter(
+        (t) => pendingAdds.has(t.id) && !cloudIds.has(t.id)
+      );
+      todos = [...cloud, ...pendingNew];
+      pendingNew.forEach((t) => cloudInsert(t));
+      if (!pendingNew.length) syncOk();
     }
+    pendingAdds.clear();
     saveLocal();
   } else {
     todos = loadLocal();
@@ -251,8 +286,9 @@ function addTodo(data) {
     endDate: data.endDate < data.startDate ? data.startDate : data.endDate,
   });
   todos.push(todo);
+  if (loadingCloud) pendingAdds.add(todo.id);
   persist();
-  if (session) cloudInsert(todo);
+  if (session && !loadingCloud) cloudInsert(todo);
   render();
 }
 
@@ -796,7 +832,16 @@ function importTodos(file) {
 form.addEventListener("submit", (e) => {
   e.preventDefault();
   const text = input.value.trim();
-  if (!text || !startInput.value || !endInput.value) return;
+  if (!text) {
+    input.focus();
+    input.placeholder = "⚠ 할 일 제목을 입력해주세요";
+    return;
+  }
+  input.placeholder = "할 일을 입력하세요";
+  if (!startInput.value || !endInput.value) {
+    alert("시작일과 종료일을 선택해주세요.");
+    return;
+  }
   addTodo({
     text,
     project: projectInput.value.trim(),
@@ -841,6 +886,8 @@ viewTabs.forEach((tab) => {
   });
 });
 
+let booted = false;
+
 if (sb) {
   loginBtn.addEventListener("click", login);
   signupBtn.addEventListener("click", signup);
@@ -848,17 +895,29 @@ if (sb) {
   authPassword.addEventListener("keydown", (e) => {
     if (e.key === "Enter") login();
   });
+  // 첫 인증 이벤트(INITIAL_SESSION)가 올 때 한 번만 초기화 →
+  // "로컬 먼저 그리고 클라우드가 덮어쓰는" 경쟁 문제 제거
   sb.auth.onAuthStateChange((_event, sess) => {
     const changed = (sess?.user?.id || null) !== (session?.user?.id || null);
     session = sess;
     updateAuthUI();
-    if (changed) initData();
+    if (!booted || changed) {
+      booted = true;
+      initData();
+    }
   });
+  // 혹시 인증 이벤트가 안 오는 환경이면 2초 후 로컬 데이터라도 표시
+  setTimeout(() => {
+    if (!booted) {
+      booted = true;
+      initData();
+    }
+  }, 2000);
 } else {
   document.getElementById("auth-bar").classList.add("hidden");
+  initData();
 }
 
 startInput.value = todayStr();
 endInput.value = todayStr();
 setDate();
-initData();

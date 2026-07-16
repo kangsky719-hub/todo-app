@@ -883,3 +883,8 @@ body {
   color: var(--color-primary);
   flex: 1;
 }
+
+.sync-error {
+  color: var(--color-danger) !important;
+  font-weight: 600;
+}

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
   <div class="app">
@@ -26,7 +26,7 @@
       </div>
       <div id="auth-logged-in" class="hidden">
         <span id="auth-user"></span>
-        <span class="auth-status">클라우드 동기화 중</span>
+        <span class="auth-status" id="sync-status">클라우드 동기화 중</span>
         <button id="logout-btn" type="button">로그아웃</button>
       </div>
     </div>
@@ -98,6 +98,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js"></script>
+  <script src="script.js?v=7"></script>
 </body>
 </html>
