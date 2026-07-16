@@ -35,6 +35,8 @@ const viewTabs = document.querySelectorAll(".view-tab");
 const listView = document.getElementById("list-view");
 const ganttView = document.getElementById("gantt-view");
 const ganttChart = document.getElementById("gantt-chart");
+const boardView = document.getElementById("board-view");
+const boardEl = document.getElementById("board");
 const dateEl = document.getElementById("date");
 
 const authEmail = document.getElementById("auth-email");
@@ -337,6 +339,7 @@ function getFilteredTodos() {
 
 function render() {
   renderList();
+  renderBoard();
   renderGantt();
   updateProjectDatalist();
 }
@@ -522,6 +525,139 @@ function renderEditItem(todo) {
   formEl.appendChild(actions);
   li.appendChild(formEl);
   return li;
+}
+
+/* ---------- 보드 뷰 (노션식 칸반) ---------- */
+
+function renderBoard() {
+  boardEl.innerHTML = "";
+
+  STATUSES.forEach((status) => {
+    const col = document.createElement("div");
+    col.className = "board-col";
+    col.dataset.status = status;
+
+    const head = document.createElement("div");
+    head.className = "board-col-head";
+    const dot = document.createElement("span");
+    dot.className = `legend-dot legend-${status}`;
+    const name = document.createElement("span");
+    name.className = "board-col-name";
+    name.textContent = status;
+    const count = document.createElement("span");
+    count.className = "board-col-count";
+    head.appendChild(dot);
+    head.appendChild(name);
+    head.appendChild(count);
+    col.appendChild(head);
+
+    const cardsWrap = document.createElement("div");
+    cardsWrap.className = "board-cards";
+
+    const items = sortByStart(todos.filter((t) => t.status === status));
+    count.textContent = items.length;
+
+    if (items.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "board-empty";
+      empty.textContent = "없음";
+      cardsWrap.appendChild(empty);
+    } else {
+      items.forEach((todo) => {
+        const card = document.createElement("div");
+        card.className = "board-card" + (isOverdue(todo) ? " overdue" : "");
+
+        if (todo.project) {
+          const proj = document.createElement("div");
+          proj.className = "board-card-project";
+          proj.textContent = todo.project;
+          card.appendChild(proj);
+        }
+
+        const title = document.createElement("div");
+        title.className = "board-card-title";
+        title.textContent = todo.text;
+        card.appendChild(title);
+
+        const dates = document.createElement("div");
+        dates.className = "board-card-dates";
+        dates.textContent = `${todo.startDate} ~ ${todo.endDate}`;
+        if (isOverdue(todo)) {
+          const badge = document.createElement("span");
+          badge.className = "overdue-badge";
+          badge.textContent = "지연";
+          dates.appendChild(badge);
+        }
+        card.appendChild(dates);
+
+        if (todo.memo) {
+          const memo = document.createElement("div");
+          memo.className = "board-card-memo";
+          memo.textContent = todo.memo;
+          card.appendChild(memo);
+        }
+
+        attachCardDrag(card, todo);
+        cardsWrap.appendChild(card);
+      });
+    }
+
+    col.appendChild(cardsWrap);
+    boardEl.appendChild(col);
+  });
+}
+
+function attachCardDrag(card, todo) {
+  let dragging = false;
+  let moved = false;
+  let startX = 0;
+  let startY = 0;
+
+  const columnUnder = (e) => {
+    card.style.pointerEvents = "none";
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    card.style.pointerEvents = "";
+    return el ? el.closest(".board-col") : null;
+  };
+
+  card.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    moved = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    card.setPointerCapture(e.pointerId);
+  });
+
+  card.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (!moved && Math.hypot(dx, dy) < 6) return;
+    moved = true;
+    card.classList.add("dragging");
+    card.style.transform = `translate(${dx}px, ${dy}px)`;
+
+    const col = columnUnder(e);
+    document
+      .querySelectorAll(".board-col")
+      .forEach((c) => c.classList.toggle("drag-over", c === col && c.dataset.status !== todo.status));
+  });
+
+  const finish = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    card.classList.remove("dragging");
+    card.style.transform = "";
+    document.querySelectorAll(".board-col").forEach((c) => c.classList.remove("drag-over"));
+    if (!moved) return;
+    const col = columnUnder(e);
+    if (col && col.dataset.status !== todo.status) {
+      setStatus(todo.id, col.dataset.status);
+    }
+  };
+
+  card.addEventListener("pointerup", finish);
+  card.addEventListener("pointercancel", finish);
 }
 
 /* ---------- 간트차트 뷰 (노션식 드래그 타임라인) ---------- */
@@ -881,6 +1017,7 @@ viewTabs.forEach((tab) => {
     tab.classList.add("active");
     currentView = tab.dataset.view;
     listView.classList.toggle("hidden", currentView !== "list");
+    boardView.classList.toggle("hidden", currentView !== "board");
     ganttView.classList.toggle("hidden", currentView !== "gantt");
     if (currentView === "gantt") renderGantt();
   });

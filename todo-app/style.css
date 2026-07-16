@@ -888,3 +888,126 @@ body {
   color: var(--color-danger) !important;
   font-weight: 600;
 }
+
+/* ---------- 보드 뷰 (노션식 칸반) ---------- */
+
+.board {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+
+.board-col {
+  flex: 1;
+  min-width: 0;
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.board-col.drag-over {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-canvas-parchment));
+}
+
+.board-col-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  color: var(--color-ink);
+}
+
+.board-col-count {
+  color: var(--color-ink-muted-48);
+  font-weight: 400;
+}
+
+.board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-height: 40px;
+}
+
+.board-card {
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  transition: border-color 0.15s;
+}
+
+.board-card:hover {
+  border-color: var(--color-ink-muted-48);
+}
+
+.board-card.dragging {
+  cursor: grabbing;
+  opacity: 0.9;
+  position: relative;
+  z-index: 10;
+  border-color: var(--color-primary);
+}
+
+.board-card.overdue {
+  border-left: 3px solid var(--color-danger);
+}
+
+.board-card-project {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.12px;
+  color: var(--color-ink-muted-48);
+  margin-bottom: 2px;
+}
+
+.board-card-title {
+  font-size: 15px;
+  line-height: 1.35;
+  letter-spacing: -0.224px;
+  color: var(--color-ink);
+  word-break: break-word;
+}
+
+.board-card-dates {
+  font-size: 11px;
+  letter-spacing: -0.12px;
+  color: var(--color-ink-muted-48);
+  margin-top: 4px;
+}
+
+.board-card-memo {
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  color: var(--color-ink-muted-48);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-empty {
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-ink-muted-48);
+  padding: var(--space-md) 0;
+}
+
+@media (max-width: 600px) {
+  .board {
+    flex-direction: column;
+  }
+
+  .board-col {
+    width: 100%;
+  }
+}

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=7" />
+<link rel="stylesheet" href="style.css?v=8" />
 </head>
 <body>
   <div class="app">
@@ -67,6 +67,7 @@
 
     <div class="view-tabs">
       <button class="view-tab active" data-view="list">목록</button>
+      <button class="view-tab" data-view="board">보드</button>
       <button class="view-tab" data-view="gantt">간트차트</button>
     </div>
 
@@ -92,12 +93,16 @@
       </footer>
     </div>
 
+    <div id="board-view" class="view hidden">
+      <div id="board" class="board"></div>
+    </div>
+
     <div id="gantt-view" class="view hidden">
       <div id="gantt-chart" class="gantt-chart"></div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js?v=7"></script>
+  <script src="script.js?v=8"></script>
 </body>
 </html>
