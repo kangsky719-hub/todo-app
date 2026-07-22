@@ -41,7 +41,8 @@
 11. **통계 뷰**: 전체/완료율/진행중/지연 타일, 상태 분포 스택바, 주간 완료 실적 막대그래프(최근 8주, completedAt 기준), 프로젝트별 진행률 바, 다가오는 7일 마감 목록, 지연 업무 목록(+경과일)
 12. **반복 업무**: recurrence(없음/매일/매주/매월). 완료로 바꾸면 원본은 completedAt 기록+recurrence 없음으로 남고 다음 회차(날짜 이동)를 자동 생성. 목록/보드에 🔁 배지. 자연어 "매주/매일/매월"도 인식
 13. **완료일 기록**: completedAt(status→완료 시 오늘 날짜, 되돌리면 삭제). 주간 그래프 집계에 사용. 이 기능 추가 이전 완료건은 completedAt이 없어 그래프에 안 잡힘
-14. **PWA**: manifest.webmanifest + sw.js(오프라인 캐시, 네트워크 우선). 홈 화면 설치 가능. 아이콘 icon-192/512/maskable-512.png(PIL로 생성, Action Blue+체크). 알림은 앱이 열려 있을 때 확실히 작동하고, 닫힌 상태 알림은 periodicSync(설치된 PWA + Chrome/Edge 한정, best-effort)로 시도 — SW가 caches 'todo-meta'/__summary 읽어 알림. 완전 보장하는 닫힌앱 푸시는 백엔드(Supabase Edge Function + Web Push) 필요, 미구현
+14. **PWA**: manifest.webmanifest + sw.js(오프라인 캐시, 네트워크 우선). 홈 화면 설치 가능. 아이콘 icon-192/512/maskable-512.png(PIL로 생성, Action Blue+체크). 알림은 앱이 열려 있을 때 확실히 작동하고, 닫힌 상태 알림은 periodicSync(설치된 PWA + Chrome/Edge 한정, best-effort)로 시도 — SW가 caches 'todo-meta'/__summary 읽어 알림. 완전 보장하는 닫힌앱 푸시는 백엔드(Supabase Edge Function + Web Push) 필요, 미구현. **sw.js 수정 시 CACHE 이름(todo-app-vN)과 CORE의 ?v=N도 함께 올릴 것**
+15. **프로젝트 색상 카테고리**: 프로젝트마다 8색 팔레트(애플 시스템 색) 자동 배정, localStorage `projectColors`에 인덱스 저장(클라우드 아님, 표시 전용). 툴바 범례 칩 클릭 → 색상 피커 팝오버로 변경. 목록 그룹헤더 색점·항목 좌측 색띠, 보드 카드 좌측 색띠(지연이면 빨강 우선), 간트 바·캘린더 칩은 툴바 "색: 상태/프로젝트" 토글(localStorage `colorBy`)로 전환. 상태 색은 여전히 기본값
 4. **인증 바**: 이메일/비밀번호 로그인·회원가입·로그아웃 (supabase-js v2 CDN), 동기화 상태/오류가 sync-status에 항상 표시됨
 5. **캐시 버스팅**: index.html에서 `style.css?v=N`, `script.js?v=N` — **파일 수정 시 반드시 v 번호를 올려야 함** (현재 v=8). netlify.toml에 no-cache 헤더 설정됨
 
@@ -85,7 +86,7 @@
 ## 알려진 사항
 - 스크린샷 도구: 브라우저 패널이 화면에 표시 중일 때만 작동 — 평소엔 DOM/JS 검증으로 대체
 - Supabase 무료 플랜: 1주일 미사용 시 프로젝트 일시정지될 수 있음 (대시보드에서 재개 가능)
-- 캐시 버전은 index.html에서 `?v=N`으로 관리 — 파일 수정 시 반드시 올릴 것 (현재 v=13). sw.js의 CACHE 이름·CORE 목록도 함께 갱신. GitHub Pages는 10분 캐시라 버전 갱신 필수
+- 캐시 버전은 index.html에서 `?v=N`으로 관리 — 파일 수정 시 반드시 올릴 것 (현재 v=14). sw.js의 CACHE 이름·CORE 목록도 함께 갱신. GitHub Pages는 10분 캐시라 버전 갱신 필수
 - **DB 선택 컬럼(priority, recurrence, completed_at)**: 사용자가 Supabase SQL Editor에서 아래 실행해야 클라우드에 저장됨. 미실행 시 앱이 자동으로 해당 컬럼만 빼고 저장(sync-status에 "~제외" 경고). script.js의 OPTIONAL_COLS/missingCols/detectMissingColumn이 처리. 실행 여부 미확인 시 사용자에게 확인할 것
   ```sql
   alter table public.todos add column if not exists priority text not null default '보통';
