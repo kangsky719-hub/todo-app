@@ -4,10 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>업무 진행 관리</title>
+<meta name="theme-color" content="#0066cc" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=12" />
+<link rel="stylesheet" href="style.css?v=13" />
 </head>
 <body>
   <div class="app">
@@ -80,6 +83,15 @@
             <option value="보통">보통</option>
             <option value="높음">높음</option>
             <option value="낮음">낮음</option>
+          </select>
+        </label>
+        <label>
+          반복
+          <select id="recurrence-input">
+            <option value="없음">반복 없음</option>
+            <option value="매일">매일</option>
+            <option value="매주">매주</option>
+            <option value="매월">매월</option>
           </select>
         </label>
       </div>
@@ -163,6 +175,15 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js?v=12"></script>
+  <script src="script.js?v=13"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch((e) =>
+          console.error("SW 등록 실패", e)
+        );
+      });
+    }
+  </script>
 </body>
 </html>

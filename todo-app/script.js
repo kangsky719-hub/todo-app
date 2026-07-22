@@ -3,6 +3,7 @@ const STATUSES = ["예정", "진행중", "완료"];
 const STATUS_PROGRESS = { 예정: 0, 진행중: 50, 완료: 100 };
 const PRIORITIES = ["높음", "보통", "낮음"];
 const PRIO_RANK = { 높음: 0, 보통: 1, 낮음: 2 };
+const RECURRENCES = ["없음", "매일", "매주", "매월"];
 
 /* ---------- Supabase ---------- */
 
@@ -45,6 +46,7 @@ const summaryEl = document.getElementById("summary");
 const searchInput = document.getElementById("search-input");
 const sortSelect = document.getElementById("sort-select");
 const priorityInput = document.getElementById("priority-input");
+const recurrenceInput = document.getElementById("recurrence-input");
 const notifyBtn = document.getElementById("notify-btn");
 const quickForm = document.getElementById("quick-form");
 const quickInput = document.getElementById("quick-input");
@@ -81,6 +83,8 @@ function normalizeTodo(t) {
     endDate: t.endDate || t.startDate || todayStr(),
     status: STATUSES.includes(t.status) ? t.status : t.completed ? "완료" : "예정",
     priority: PRIORITIES.includes(t.priority) ? t.priority : "보통",
+    recurrence: RECURRENCES.includes(t.recurrence) ? t.recurrence : "없음",
+    completedAt: t.completedAt || (t.status === "완료" ? t.completedAt || "" : ""),
   };
 }
 
@@ -94,11 +98,19 @@ function fromRow(r) {
     endDate: r.end_date,
     status: r.status,
     priority: PRIORITIES.includes(r.priority) ? r.priority : "보통",
+    recurrence: RECURRENCES.includes(r.recurrence) ? r.recurrence : "없음",
+    completedAt: r.completed_at || "",
   };
 }
 
-// DB에 priority 컬럼이 아직 없으면 자동으로 빼고 저장 (SQL 실행 전 호환)
-let priorityColumnMissing = false;
+// DB에 아직 없는 선택 컬럼은 자동으로 빼고 저장 (SQL 실행 전에도 앱이 동작)
+// 컬럼명(앱 필드) → DB 컬럼명 매핑
+const OPTIONAL_COLS = {
+  priority: "priority",
+  recurrence: "recurrence",
+  completedAt: "completed_at",
+};
+const missingCols = new Set();
 
 function toRow(t) {
   const row = {
@@ -110,17 +122,33 @@ function toRow(t) {
     end_date: t.endDate,
     status: t.status,
   };
-  if (!priorityColumnMissing) row.priority = t.priority;
+  if (!missingCols.has("priority")) row.priority = t.priority;
+  if (!missingCols.has("recurrence")) row.recurrence = t.recurrence;
+  if (!missingCols.has("completedAt")) row.completed_at = t.completedAt || null;
   return row;
 }
 
-function isPriorityColumnError(error) {
-  return !priorityColumnMissing && /priority/i.test(error.message || "");
+// 에러 메시지에서 누락된 선택 컬럼을 찾아 표시. 새로 발견하면 true 반환(재시도용)
+function detectMissingColumn(error) {
+  const msg = error.message || "";
+  let found = false;
+  for (const [field, col] of Object.entries(OPTIONAL_COLS)) {
+    if (missingCols.has(field)) continue;
+    const re = new RegExp(`\\b${col}\\b`, "i");
+    if (re.test(msg)) {
+      missingCols.add(field);
+      found = true;
+    }
+  }
+  return found;
 }
 
-function syncOkOrPriorityWarn() {
-  if (priorityColumnMissing) {
-    setSync("동기화됨 (우선순위 제외 — Supabase에 priority 컬럼 추가 필요)", true);
+function syncOkOrWarn() {
+  if (missingCols.size > 0) {
+    const labels = [...missingCols].map((f) =>
+      f === "priority" ? "우선순위" : f === "recurrence" ? "반복" : "완료일"
+    );
+    setSync(`동기화됨 (${labels.join("·")} 제외 — Supabase 컬럼 추가 필요)`, true);
   } else {
     syncOk();
   }
@@ -168,22 +196,20 @@ async function cloudLoad() {
 
 async function cloudInsert(todo) {
   let { error } = await sb.from("todos").insert(toRow(todo));
-  if (error && isPriorityColumnError(error)) {
-    priorityColumnMissing = true;
+  if (error && detectMissingColumn(error)) {
     ({ error } = await sb.from("todos").insert(toRow(todo)));
   }
   if (error) cloudError(error, "저장");
-  else syncOkOrPriorityWarn();
+  else syncOkOrWarn();
 }
 
 async function cloudUpdate(todo) {
   let { error } = await sb.from("todos").update(toRow(todo)).eq("id", todo.id);
-  if (error && isPriorityColumnError(error)) {
-    priorityColumnMissing = true;
+  if (error && detectMissingColumn(error)) {
     ({ error } = await sb.from("todos").update(toRow(todo)).eq("id", todo.id));
   }
   if (error) cloudError(error, "수정");
-  else syncOkOrPriorityWarn();
+  else syncOkOrWarn();
 }
 
 async function cloudDelete(id) {
@@ -197,13 +223,12 @@ async function cloudReplaceAll(items) {
   if (delErr) return cloudError(delErr, "교체(삭제)");
   if (items.length) {
     let { error: insErr } = await sb.from("todos").insert(items.map(toRow));
-    if (insErr && isPriorityColumnError(insErr)) {
-      priorityColumnMissing = true;
+    if (insErr && detectMissingColumn(insErr)) {
       ({ error: insErr } = await sb.from("todos").insert(items.map(toRow)));
     }
     if (insErr) return cloudError(insErr, "교체(저장)");
   }
-  syncOkOrPriorityWarn();
+  syncOkOrWarn();
 }
 
 function persist() {
@@ -391,13 +416,57 @@ function updateTodo(id, data) {
   render();
 }
 
+function nextRecurDate(dateStr, recurrence) {
+  if (recurrence === "매일") return addDays(dateStr, 1);
+  if (recurrence === "매주") return addDays(dateStr, 7);
+  if (recurrence === "매월") {
+    const d = new Date(dateStr);
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+  return dateStr;
+}
+
+// 반복 업무가 완료되면 다음 회차를 자동 생성
+function spawnNextOccurrence(todo) {
+  const next = normalizeTodo({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    text: todo.text,
+    memo: todo.memo,
+    project: todo.project,
+    startDate: nextRecurDate(todo.startDate, todo.recurrence),
+    endDate: nextRecurDate(todo.endDate, todo.recurrence),
+    status: "예정",
+    priority: todo.priority,
+    recurrence: todo.recurrence,
+  });
+  // 완료된 원본은 기록으로 남기고 반복은 새 회차가 이어받음
+  todo.recurrence = "없음";
+  todos.push(next);
+  if (session) cloudInsert(next);
+  return next;
+}
+
 function setStatus(id, status) {
   const todo = todos.find((t) => t.id === id);
   if (!todo) return;
+  const wasCompleted = todo.status === "완료";
   todo.status = status;
+  let spawned = null;
+  if (status === "완료") {
+    if (!todo.completedAt) todo.completedAt = todayStr();
+    if (!wasCompleted && todo.recurrence && todo.recurrence !== "없음") {
+      spawned = spawnNextOccurrence(todo);
+    }
+  } else {
+    todo.completedAt = "";
+  }
   persist();
   if (session) cloudUpdate(todo);
   render();
+  if (spawned) {
+    setSync(`반복 업무 다음 회차 생성됨 (${spawned.endDate})`);
+  }
 }
 
 function deleteTodo(id) {
@@ -437,6 +506,7 @@ function render() {
   renderCalendar();
   renderStats();
   updateProjectDatalist();
+  updateSwSummary();
 }
 
 /* ---------- 요약 대시보드 ---------- */
@@ -548,6 +618,12 @@ function renderItem(todo) {
   const text = document.createElement("span");
   text.className = "todo-text";
   text.textContent = todo.text;
+  if (todo.recurrence !== "없음") {
+    const rec = document.createElement("span");
+    rec.className = "recur-badge";
+    rec.textContent = `🔁 ${todo.recurrence}`;
+    text.appendChild(rec);
+  }
 
   const dates = document.createElement("span");
   dates.className = "todo-dates";
@@ -652,10 +728,20 @@ function renderEditItem(todo) {
     priorityField.appendChild(opt);
   });
 
+  const recurrenceField = document.createElement("select");
+  RECURRENCES.forEach((rc) => {
+    const opt = document.createElement("option");
+    opt.value = rc;
+    opt.textContent = rc === "없음" ? "반복 없음" : rc;
+    if (rc === todo.recurrence) opt.selected = true;
+    recurrenceField.appendChild(opt);
+  });
+
   row.appendChild(projectField);
   row.appendChild(startField);
   row.appendChild(endField);
   row.appendChild(priorityField);
+  row.appendChild(recurrenceField);
 
   const memoField = document.createElement("textarea");
   memoField.rows = 2;
@@ -679,6 +765,7 @@ function renderEditItem(todo) {
       startDate: startField.value,
       endDate: endField.value,
       priority: priorityField.value,
+      recurrence: recurrenceField.value,
     });
   });
 
@@ -1129,6 +1216,7 @@ function parseQuickInput(raw) {
   const out = {
     project: "",
     priority: "보통",
+    recurrence: "없음",
     startDate: today,
     endDate: today,
     dateLabel: "오늘",
@@ -1142,6 +1230,12 @@ function parseQuickInput(raw) {
     out.priority = p;
     return "";
   });
+  // 반복: "매일/매주/매월" 또는 "*매주" 형태
+  let rm = text.match(/\*?(매일|매주|매월)/);
+  if (rm) {
+    out.recurrence = rm[1];
+    text = text.replace(rm[0], "");
+  }
 
   let dateFound = null;
   let label = "";
@@ -1204,6 +1298,7 @@ function updateQuickPreview() {
   if (p.project) parts.push(`프로젝트 ${p.project}`);
   parts.push(`마감 ${p.endDate} (${p.dateLabel})`);
   if (p.priority !== "보통") parts.push(`우선순위 ${p.priority}`);
+  if (p.recurrence !== "없음") parts.push(`반복 ${p.recurrence}`);
   quickPreview.textContent = "→ " + parts.join(" · ");
 }
 
@@ -1221,6 +1316,7 @@ quickForm.addEventListener("submit", (e) => {
     endDate: p.endDate,
     status: "예정",
     priority: p.priority,
+    recurrence: p.recurrence,
   });
   quickInput.value = "";
   quickPreview.classList.add("hidden");
@@ -1382,6 +1478,45 @@ function renderStats() {
   distSection.appendChild(stackLegend);
   statsEl.appendChild(distSection);
 
+  // 주간 완료 실적 (최근 8주, completedAt 기준)
+  const weekSection = el("div", "stat-section");
+  weekSection.appendChild(el("h3", "stat-heading", "주간 완료 실적 (최근 8주)"));
+  const today = todayStr();
+  const todayDow = new Date(today).getUTCDay();
+  // 이번 주 월요일
+  const thisMonday = addDays(today, todayDow === 0 ? -6 : 1 - todayDow);
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const start = addDays(thisMonday, -7 * i);
+    const end = addDays(start, 6);
+    const count = todos.filter(
+      (t) => t.completedAt && t.completedAt >= start && t.completedAt <= end
+    ).length;
+    weeks.push({ start, end, count, isThis: i === 0 });
+  }
+  const maxCount = Math.max(1, ...weeks.map((w) => w.count));
+  const chart = el("div", "week-chart");
+  weeks.forEach((w) => {
+    const col = el("div", "week-col" + (w.isThis ? " current" : ""));
+    const barWrap = el("div", "week-bar-wrap");
+    const bar = el("div", "week-bar");
+    bar.style.height = `${(w.count / maxCount) * 100}%`;
+    if (w.count > 0) bar.appendChild(el("span", "week-bar-num", String(w.count)));
+    bar.title = `${w.start} ~ ${w.end}: ${w.count}건 완료`;
+    barWrap.appendChild(bar);
+    col.appendChild(barWrap);
+    col.appendChild(el("div", "week-label", `${Number(w.start.slice(5, 7))}/${Number(w.start.slice(8, 10))}`));
+    chart.appendChild(col);
+  });
+  weekSection.appendChild(chart);
+  const totalDone = todos.filter((t) => t.completedAt).length;
+  if (totalDone === 0) {
+    weekSection.appendChild(
+      el("p", "stat-empty", "이 기능 추가 이후 완료한 업무부터 집계됩니다")
+    );
+  }
+  statsEl.appendChild(weekSection);
+
   // 프로젝트별 진행률
   const projects = getProjects();
   if (projects.length > 0) {
@@ -1471,13 +1606,37 @@ function updateNotifyBtn() {
   else notifyBtn.textContent = "알림 켜기";
 }
 
+function deadlineCounts() {
+  return {
+    overdue: todos.filter(isOverdue).length,
+    dueToday: todos.filter((t) => dDay(t) === 0).length,
+    dueTomorrow: todos.filter((t) => dDay(t) === 1).length,
+  };
+}
+
+// 서비스 워커가 백그라운드에서 읽을 수 있도록 마감 요약을 Cache Storage에 기록
+async function updateSwSummary() {
+  if (!("caches" in window)) return;
+  try {
+    const c = deadlineCounts();
+    const cache = await caches.open("todo-meta");
+    await cache.put(
+      "/__summary",
+      new Response(JSON.stringify({ ...c, date: todayStr() }), {
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+  } catch (e) {
+    /* 무시 */
+  }
+}
+
 function checkDeadlineNotifications(force = false) {
+  updateSwSummary();
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   if (!force && localStorage.getItem(NOTIFIED_KEY) === todayStr()) return;
 
-  const overdue = todos.filter(isOverdue).length;
-  const dueToday = todos.filter((t) => dDay(t) === 0).length;
-  const dueTomorrow = todos.filter((t) => dDay(t) === 1).length;
+  const { overdue, dueToday, dueTomorrow } = deadlineCounts();
   if (overdue + dueToday + dueTomorrow === 0) return;
 
   const parts = [];
@@ -1485,10 +1644,32 @@ function checkDeadlineNotifications(force = false) {
   if (dueToday) parts.push(`오늘 마감 ${dueToday}건`);
   if (dueTomorrow) parts.push(`내일 마감 ${dueTomorrow}건`);
   try {
-    new Notification("업무 진행 관리", { body: parts.join(" · ") });
+    new Notification("업무 진행 관리", {
+      body: parts.join(" · "),
+      icon: "icon-192.png",
+    });
     localStorage.setItem(NOTIFIED_KEY, todayStr());
   } catch (e) {
     console.error("notification", e);
+  }
+}
+
+// 지원 브라우저(설치된 PWA)에서 주기적 백그라운드 마감 확인 등록 — 최선 노력
+async function registerPeriodicSync() {
+  try {
+    const reg = await navigator.serviceWorker?.ready;
+    if (reg && "periodicSync" in reg) {
+      const status = await navigator.permissions
+        .query({ name: "periodic-background-sync" })
+        .catch(() => ({ state: "denied" }));
+      if (status.state === "granted") {
+        await reg.periodicSync.register("check-deadlines", {
+          minInterval: 12 * 60 * 60 * 1000, // 12시간
+        });
+      }
+    }
+  } catch (e) {
+    /* 미지원 브라우저는 무시 */
   }
 }
 
@@ -1503,9 +1684,11 @@ notifyBtn.addEventListener("click", async () => {
   }
   updateNotifyBtn();
   checkDeadlineNotifications(true);
+  registerPeriodicSync();
 });
 
 setInterval(() => checkDeadlineNotifications(), 30 * 60 * 1000);
+registerPeriodicSync();
 
 /* ---------- 백업 ---------- */
 
@@ -1566,6 +1749,7 @@ form.addEventListener("submit", (e) => {
     endDate: endInput.value,
     status: statusInput.value,
     priority: priorityInput.value,
+    recurrence: recurrenceInput.value,
   });
   input.value = "";
   memoInput.value = "";
@@ -1574,6 +1758,7 @@ form.addEventListener("submit", (e) => {
   endInput.value = todayStr();
   statusInput.value = "예정";
   priorityInput.value = "보통";
+  recurrenceInput.value = "없음";
 });
 
 clearCompletedBtn.addEventListener("click", clearCompleted);

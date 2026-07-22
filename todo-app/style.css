@@ -1568,3 +1568,83 @@ body {
 .view-tab {
   white-space: nowrap;
 }
+
+/* ---------- 반복 배지 ---------- */
+
+.recur-badge {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  letter-spacing: -0.12px;
+  color: var(--color-primary);
+  vertical-align: 1px;
+}
+
+.board-card-title .recur-badge {
+  display: block;
+  margin-left: 0;
+  margin-top: 2px;
+}
+
+/* ---------- 주간 완료 실적 그래프 ---------- */
+
+.week-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 140px;
+  padding-top: 8px;
+}
+
+.week-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+}
+
+.week-bar-wrap {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.week-bar {
+  width: 70%;
+  min-height: 2px;
+  background: var(--color-primary);
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  transition: height 0.3s;
+  display: flex;
+  justify-content: center;
+}
+
+.week-col.current .week-bar {
+  background: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.week-bar-num {
+  position: absolute;
+  top: -16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.week-label {
+  font-size: 10px;
+  letter-spacing: -0.08px;
+  color: var(--color-ink-muted-48);
+  white-space: nowrap;
+}
+
+.week-col.current .week-label {
+  color: var(--color-primary);
+  font-weight: 600;
+}
