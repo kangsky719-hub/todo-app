@@ -46,6 +46,18 @@ const searchInput = document.getElementById("search-input");
 const sortSelect = document.getElementById("sort-select");
 const priorityInput = document.getElementById("priority-input");
 const notifyBtn = document.getElementById("notify-btn");
+const quickForm = document.getElementById("quick-form");
+const quickInput = document.getElementById("quick-input");
+const quickPreview = document.getElementById("quick-preview");
+const detailForm = document.getElementById("detail-form");
+const calendarView = document.getElementById("calendar-view");
+const statsView = document.getElementById("stats-view");
+const calGrid = document.getElementById("calendar-grid");
+const calTitle = document.getElementById("cal-title");
+const calPrev = document.getElementById("cal-prev");
+const calNext = document.getElementById("cal-next");
+const calTodayBtn = document.getElementById("cal-today");
+const statsEl = document.getElementById("stats");
 const dateEl = document.getElementById("date");
 
 const authEmail = document.getElementById("auth-email");
@@ -422,6 +434,8 @@ function render() {
   renderList();
   renderBoard();
   renderGantt();
+  renderCalendar();
+  renderStats();
   updateProjectDatalist();
 }
 
@@ -1104,6 +1118,345 @@ function attachBarDrag(bar, todo, rangeStart, rangeEnd) {
   bar.addEventListener("pointercancel", finish);
 }
 
+/* ---------- 자연어 빠른 추가 ---------- */
+
+const DOW_MAP = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
+
+function parseQuickInput(raw) {
+  let text = raw.trim();
+  if (!text) return null;
+  const today = todayStr();
+  const out = {
+    project: "",
+    priority: "보통",
+    startDate: today,
+    endDate: today,
+    dateLabel: "오늘",
+  };
+
+  text = text.replace(/#(\S+)/, (_, p) => {
+    out.project = p;
+    return "";
+  });
+  text = text.replace(/!(높음|보통|낮음)/, (_, p) => {
+    out.priority = p;
+    return "";
+  });
+
+  let dateFound = null;
+  let label = "";
+
+  // "7/25", "7월 25일" 형식
+  let m = text.match(/(\d{1,2})\s*[\/월]\s*(\d{1,2})\s*일?\s*(까지)?/);
+  if (m) {
+    const y = Number(today.slice(0, 4));
+    dateFound = `${y}-${String(m[1]).padStart(2, "0")}-${String(m[2]).padStart(2, "0")}`;
+    label = `${Number(m[1])}/${Number(m[2])}`;
+    text = text.replace(m[0], "");
+  }
+  // 오늘/내일/모레
+  if (!dateFound) {
+    m = text.match(/(오늘|내일|모레)\s*(까지)?/);
+    if (m) {
+      const offs = { 오늘: 0, 내일: 1, 모레: 2 };
+      dateFound = addDays(today, offs[m[1]]);
+      label = m[1];
+      text = text.replace(m[0], "");
+    }
+  }
+  // (다음주) X요일
+  if (!dateFound) {
+    m = text.match(/(다음\s*주\s*)?([일월화수목금토])요일\s*(까지)?/);
+    if (m) {
+      const dow = new Date(today).getUTCDay();
+      let diff;
+      if (m[1]) {
+        // 다음주 X요일 = 다음 주(월요일 시작)의 해당 요일
+        const toNextMonday = ((1 - dow + 7) % 7) || 7;
+        diff = toNextMonday + ((DOW_MAP[m[2]] - 1 + 7) % 7);
+      } else {
+        // 가장 가까운 X요일 (오늘 포함)
+        diff = (DOW_MAP[m[2]] - dow + 7) % 7;
+      }
+      dateFound = addDays(today, diff);
+      label = (m[1] ? "다음주 " : "") + m[2] + "요일";
+      text = text.replace(m[0], "");
+    }
+  }
+
+  if (dateFound && dateFound >= today) {
+    out.endDate = dateFound;
+    out.dateLabel = label;
+  }
+
+  out.text = text.replace(/\s+/g, " ").trim();
+  return out.text ? out : null;
+}
+
+function updateQuickPreview() {
+  const p = parseQuickInput(quickInput.value);
+  if (!p) {
+    quickPreview.classList.add("hidden");
+    return;
+  }
+  quickPreview.classList.remove("hidden");
+  const parts = [`"${p.text}"`];
+  if (p.project) parts.push(`프로젝트 ${p.project}`);
+  parts.push(`마감 ${p.endDate} (${p.dateLabel})`);
+  if (p.priority !== "보통") parts.push(`우선순위 ${p.priority}`);
+  quickPreview.textContent = "→ " + parts.join(" · ");
+}
+
+quickInput.addEventListener("input", updateQuickPreview);
+
+quickForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const p = parseQuickInput(quickInput.value);
+  if (!p) return;
+  addTodo({
+    text: p.text,
+    project: p.project,
+    memo: "",
+    startDate: p.startDate,
+    endDate: p.endDate,
+    status: "예정",
+    priority: p.priority,
+  });
+  quickInput.value = "";
+  quickPreview.classList.add("hidden");
+  quickInput.focus();
+});
+
+/* ---------- 캘린더 뷰 ---------- */
+
+let calMonth = todayStr().slice(0, 7); // "YYYY-MM"
+
+function renderCalendar() {
+  const [y, mo] = calMonth.split("-").map(Number);
+  calTitle.textContent = `${y}년 ${mo}월`;
+  calGrid.innerHTML = "";
+
+  const first = `${calMonth}-01`;
+  const firstDow = new Date(first).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
+  const gridStart = addDays(first, -firstDow);
+  const today = todayStr();
+  const searched = applySearch(todos);
+
+  for (let i = 0; i < totalCells; i++) {
+    const ds = addDays(gridStart, i);
+    const inMonth = ds.slice(0, 7) === calMonth;
+    const dow = i % 7;
+    const cell = document.createElement("div");
+    cell.className =
+      "cal-cell" +
+      (inMonth ? "" : " other-month") +
+      (ds === today ? " today" : "") +
+      (dow === 0 || dow === 6 ? " weekend" : "");
+
+    const num = document.createElement("div");
+    num.className = "cal-num";
+    num.textContent = Number(ds.slice(8, 10));
+    cell.appendChild(num);
+
+    const dayTodos = searched.filter(
+      (t) => t.startDate <= ds && ds <= t.endDate
+    );
+    dayTodos.slice(0, 3).forEach((t) => {
+      const chip = document.createElement("div");
+      chip.className =
+        `cal-chip status-${t.status}` + (isOverdue(t) ? " overdue" : "");
+      chip.textContent = t.text;
+      chip.title = `${t.text} (${t.startDate}~${t.endDate} · ${t.status})`;
+      cell.appendChild(chip);
+    });
+    if (dayTodos.length > 3) {
+      const more = document.createElement("div");
+      more.className = "cal-more";
+      more.textContent = `+${dayTodos.length - 3}건 더`;
+      cell.appendChild(more);
+    }
+
+    cell.addEventListener("click", (e) => {
+      if (e.target.closest(".cal-chip")) return;
+      startInput.value = ds;
+      endInput.value = ds;
+      detailForm.open = true;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      input.focus();
+    });
+
+    calGrid.appendChild(cell);
+  }
+}
+
+function shiftCalMonth(d) {
+  let [y, m] = calMonth.split("-").map(Number);
+  m += d;
+  if (m < 1) {
+    m = 12;
+    y--;
+  }
+  if (m > 12) {
+    m = 1;
+    y++;
+  }
+  calMonth = `${y}-${String(m).padStart(2, "0")}`;
+  renderCalendar();
+}
+
+calPrev.addEventListener("click", () => shiftCalMonth(-1));
+calNext.addEventListener("click", () => shiftCalMonth(1));
+calTodayBtn.addEventListener("click", () => {
+  calMonth = todayStr().slice(0, 7);
+  renderCalendar();
+});
+
+/* ---------- 통계 뷰 ---------- */
+
+function el(tag, cls, textContent) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (textContent !== undefined) e.textContent = textContent;
+  return e;
+}
+
+function renderStats() {
+  statsEl.innerHTML = "";
+
+  const total = todos.length;
+  if (total === 0) {
+    statsEl.appendChild(el("div", "empty-state", "할 일이 없습니다"));
+    return;
+  }
+
+  const done = todos.filter((t) => t.status === "완료").length;
+  const inProg = todos.filter((t) => t.status === "진행중").length;
+  const planned = todos.filter((t) => t.status === "예정").length;
+  const overdueList = todos.filter(isOverdue);
+  const rate = Math.round((done / total) * 100);
+
+  // 핵심 지표 타일
+  const tiles = el("div", "stat-tiles");
+  [
+    ["전체 업무", `${total}건`, false],
+    ["완료율", `${rate}%`, false],
+    ["진행중", `${inProg}건`, false],
+    ["지연", `${overdueList.length}건`, overdueList.length > 0],
+  ].forEach(([label, value, danger]) => {
+    const tile = el("div", "stat-tile" + (danger ? " danger" : ""));
+    tile.appendChild(el("div", "stat-value", value));
+    tile.appendChild(el("div", "stat-label", label));
+    tiles.appendChild(tile);
+  });
+  statsEl.appendChild(tiles);
+
+  // 상태 분포 스택바
+  const distSection = el("div", "stat-section");
+  distSection.appendChild(el("h3", "stat-heading", "상태 분포"));
+  const stack = el("div", "stat-stack");
+  [
+    ["예정", planned],
+    ["진행중", inProg],
+    ["완료", done],
+  ].forEach(([s, n]) => {
+    if (n === 0) return;
+    const seg = el("div", `stat-stack-seg seg-${s}`);
+    seg.style.width = `${(n / total) * 100}%`;
+    seg.title = `${s} ${n}건`;
+    stack.appendChild(seg);
+  });
+  distSection.appendChild(stack);
+  const stackLegend = el("div", "stat-stack-legend");
+  [
+    ["예정", planned],
+    ["진행중", inProg],
+    ["완료", done],
+  ].forEach(([s, n]) => {
+    const item = el("span", "legend-item");
+    item.appendChild(el("span", `legend-dot legend-${s}`));
+    item.appendChild(document.createTextNode(`${s} ${n}`));
+    stackLegend.appendChild(item);
+  });
+  distSection.appendChild(stackLegend);
+  statsEl.appendChild(distSection);
+
+  // 프로젝트별 진행률
+  const projects = getProjects();
+  if (projects.length > 0) {
+    const projSection = el("div", "stat-section");
+    projSection.appendChild(el("h3", "stat-heading", "프로젝트별 진행률"));
+    const items = [...projects, ""];
+    items.forEach((p) => {
+      const list = todos.filter((t) => (t.project || "") === p);
+      if (list.length === 0) return;
+      const pDone = list.filter((t) => t.status === "완료").length;
+      const pOver = list.filter(isOverdue).length;
+      const pct = Math.round((pDone / list.length) * 100);
+
+      const row = el("div", "stat-proj");
+      const head = el("div", "stat-proj-head");
+      head.appendChild(el("span", "stat-proj-name", p || "기타"));
+      const meta = el("span", "stat-proj-meta", `${pDone}/${list.length} · ${pct}%`);
+      if (pOver > 0) {
+        meta.appendChild(el("span", "stat-proj-overdue", ` 지연 ${pOver}`));
+      }
+      head.appendChild(meta);
+      row.appendChild(head);
+      const bar = el("div", "stat-bar");
+      const fill = el("div", "stat-bar-fill");
+      fill.style.width = `${pct}%`;
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      projSection.appendChild(row);
+    });
+    statsEl.appendChild(projSection);
+  }
+
+  // 다가오는 7일 마감
+  const upcoming = todos
+    .filter((t) => {
+      const d = dDay(t);
+      return d !== null && d >= 0 && d <= 7;
+    })
+    .sort((a, b) => a.endDate.localeCompare(b.endDate));
+  const upSection = el("div", "stat-section");
+  upSection.appendChild(el("h3", "stat-heading", "다가오는 7일 마감"));
+  if (upcoming.length === 0) {
+    upSection.appendChild(el("p", "stat-empty", "7일 내 마감 예정 업무가 없습니다"));
+  } else {
+    upcoming.forEach((t) => {
+      const d = dDay(t);
+      const row = el("div", "stat-row");
+      row.appendChild(
+        el("span", "stat-row-dday" + (d === 0 ? " today" : ""), d === 0 ? "오늘" : `D-${d}`)
+      );
+      row.appendChild(el("span", "stat-row-text", t.text));
+      row.appendChild(el("span", "stat-row-meta", t.project || ""));
+      upSection.appendChild(row);
+    });
+  }
+  statsEl.appendChild(upSection);
+
+  // 지연 업무
+  if (overdueList.length > 0) {
+    const odSection = el("div", "stat-section");
+    odSection.appendChild(el("h3", "stat-heading", "지연 업무"));
+    overdueList
+      .sort((a, b) => a.endDate.localeCompare(b.endDate))
+      .forEach((t) => {
+        const days = -dDay(t);
+        const row = el("div", "stat-row");
+        row.appendChild(el("span", "stat-row-dday overdue", `+${days}일`));
+        row.appendChild(el("span", "stat-row-text", t.text));
+        row.appendChild(el("span", "stat-row-meta", t.project || ""));
+        odSection.appendChild(row);
+      });
+    statsEl.appendChild(odSection);
+  }
+}
+
 /* ---------- 마감 알림 ---------- */
 
 const NOTIFIED_KEY = "notifiedOn";
@@ -1242,6 +1595,7 @@ searchInput.addEventListener("input", () => {
   renderList();
   renderBoard();
   if (currentView === "gantt") renderGantt();
+  if (currentView === "calendar") renderCalendar();
 });
 
 sortSelect.addEventListener("change", () => {
@@ -1259,7 +1613,11 @@ viewTabs.forEach((tab) => {
     listView.classList.toggle("hidden", currentView !== "list");
     boardView.classList.toggle("hidden", currentView !== "board");
     ganttView.classList.toggle("hidden", currentView !== "gantt");
+    calendarView.classList.toggle("hidden", currentView !== "calendar");
+    statsView.classList.toggle("hidden", currentView !== "stats");
     if (currentView === "gantt") renderGantt();
+    if (currentView === "calendar") renderCalendar();
+    if (currentView === "stats") renderStats();
   });
 });
 

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=11" />
+<link rel="stylesheet" href="style.css?v=12" />
 </head>
 <body>
   <div class="app">
@@ -33,6 +33,18 @@
 
     <div id="summary" class="summary"></div>
 
+    <form id="quick-form" class="quick-form">
+      <input
+        type="text"
+        id="quick-input"
+        placeholder='⚡ 빠른 추가 — 예: "내일까지 보고서 제출 #영업 !높음"'
+        autocomplete="off"
+      />
+    </form>
+    <div id="quick-preview" class="quick-preview hidden"></div>
+
+    <details id="detail-form" class="detail-form">
+      <summary>상세 입력 (메모·시작일·상태 포함)</summary>
     <form id="todo-form" class="todo-form">
       <input
         type="text"
@@ -74,6 +86,7 @@
       <textarea id="memo-input" rows="2" placeholder="메모 (선택)"></textarea>
       <button type="submit">추가</button>
     </form>
+    </details>
 
     <div class="toolbar">
       <input
@@ -93,6 +106,8 @@
       <button class="view-tab active" data-view="list">목록</button>
       <button class="view-tab" data-view="board">보드</button>
       <button class="view-tab" data-view="gantt">간트차트</button>
+      <button class="view-tab" data-view="calendar">캘린더</button>
+      <button class="view-tab" data-view="stats">통계</button>
     </div>
 
     <div id="list-view" class="view">
@@ -125,9 +140,29 @@
     <div id="gantt-view" class="view hidden">
       <div id="gantt-chart" class="gantt-chart"></div>
     </div>
+
+    <div id="calendar-view" class="view hidden">
+      <div class="cal-header">
+        <button id="cal-prev" type="button" title="이전 달">◀</button>
+        <div id="cal-title" class="cal-title"></div>
+        <button id="cal-next" type="button" title="다음 달">▶</button>
+        <button id="cal-today" type="button">오늘</button>
+      </div>
+      <div class="cal-scroll">
+        <div class="cal-dow">
+          <span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span>
+        </div>
+        <div id="calendar-grid" class="cal-grid"></div>
+      </div>
+      <p class="cal-hint">빈 날짜를 클릭하면 그 날짜로 새 업무를 추가할 수 있어요</p>
+    </div>
+
+    <div id="stats-view" class="view hidden">
+      <div id="stats" class="stats"></div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js?v=11"></script>
+  <script src="script.js?v=12"></script>
 </body>
 </html>
