@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=10" />
+<link rel="stylesheet" href="style.css?v=11" />
 </head>
 <body>
   <div class="app">
@@ -62,6 +62,14 @@
             <option value="완료">완료</option>
           </select>
         </label>
+        <label>
+          우선순위
+          <select id="priority-input">
+            <option value="보통">보통</option>
+            <option value="높음">높음</option>
+            <option value="낮음">낮음</option>
+          </select>
+        </label>
       </div>
       <textarea id="memo-input" rows="2" placeholder="메모 (선택)"></textarea>
       <button type="submit">추가</button>
@@ -77,6 +85,7 @@
       <select id="sort-select" title="정렬 기준">
         <option value="start">시작일순</option>
         <option value="end">마감일순</option>
+        <option value="priority">우선순위순</option>
       </select>
     </div>
 
@@ -100,6 +109,7 @@
       <footer class="app-footer">
         <span id="items-left">0개 남음</span>
         <span class="footer-actions">
+          <button id="notify-btn">알림 켜기</button>
           <button id="export-btn">내보내기</button>
           <button id="import-btn">가져오기</button>
           <button id="clear-completed">완료 항목 삭제</button>
@@ -118,6 +128,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js?v=10"></script>
+  <script src="script.js?v=11"></script>
 </body>
 </html>

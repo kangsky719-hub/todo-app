@@ -1,6 +1,8 @@
 const STORAGE_KEY = "todos";
 const STATUSES = ["예정", "진행중", "완료"];
 const STATUS_PROGRESS = { 예정: 0, 진행중: 50, 완료: 100 };
+const PRIORITIES = ["높음", "보통", "낮음"];
+const PRIO_RANK = { 높음: 0, 보통: 1, 낮음: 2 };
 
 /* ---------- Supabase ---------- */
 
@@ -42,6 +44,8 @@ const boardEl = document.getElementById("board");
 const summaryEl = document.getElementById("summary");
 const searchInput = document.getElementById("search-input");
 const sortSelect = document.getElementById("sort-select");
+const priorityInput = document.getElementById("priority-input");
+const notifyBtn = document.getElementById("notify-btn");
 const dateEl = document.getElementById("date");
 
 const authEmail = document.getElementById("auth-email");
@@ -64,6 +68,7 @@ function normalizeTodo(t) {
     startDate: t.startDate || todayStr(),
     endDate: t.endDate || t.startDate || todayStr(),
     status: STATUSES.includes(t.status) ? t.status : t.completed ? "완료" : "예정",
+    priority: PRIORITIES.includes(t.priority) ? t.priority : "보통",
   };
 }
 
@@ -76,11 +81,15 @@ function fromRow(r) {
     startDate: r.start_date,
     endDate: r.end_date,
     status: r.status,
+    priority: PRIORITIES.includes(r.priority) ? r.priority : "보통",
   };
 }
 
+// DB에 priority 컬럼이 아직 없으면 자동으로 빼고 저장 (SQL 실행 전 호환)
+let priorityColumnMissing = false;
+
 function toRow(t) {
-  return {
+  const row = {
     id: t.id,
     text: t.text,
     memo: t.memo,
@@ -89,6 +98,20 @@ function toRow(t) {
     end_date: t.endDate,
     status: t.status,
   };
+  if (!priorityColumnMissing) row.priority = t.priority;
+  return row;
+}
+
+function isPriorityColumnError(error) {
+  return !priorityColumnMissing && /priority/i.test(error.message || "");
+}
+
+function syncOkOrPriorityWarn() {
+  if (priorityColumnMissing) {
+    setSync("동기화됨 (우선순위 제외 — Supabase에 priority 컬럼 추가 필요)", true);
+  } else {
+    syncOk();
+  }
 }
 
 function loadLocal() {
@@ -132,15 +155,23 @@ async function cloudLoad() {
 }
 
 async function cloudInsert(todo) {
-  const { error } = await sb.from("todos").insert(toRow(todo));
+  let { error } = await sb.from("todos").insert(toRow(todo));
+  if (error && isPriorityColumnError(error)) {
+    priorityColumnMissing = true;
+    ({ error } = await sb.from("todos").insert(toRow(todo)));
+  }
   if (error) cloudError(error, "저장");
-  else syncOk();
+  else syncOkOrPriorityWarn();
 }
 
 async function cloudUpdate(todo) {
-  const { error } = await sb.from("todos").update(toRow(todo)).eq("id", todo.id);
+  let { error } = await sb.from("todos").update(toRow(todo)).eq("id", todo.id);
+  if (error && isPriorityColumnError(error)) {
+    priorityColumnMissing = true;
+    ({ error } = await sb.from("todos").update(toRow(todo)).eq("id", todo.id));
+  }
   if (error) cloudError(error, "수정");
-  else syncOk();
+  else syncOkOrPriorityWarn();
 }
 
 async function cloudDelete(id) {
@@ -153,10 +184,14 @@ async function cloudReplaceAll(items) {
   const { error: delErr } = await sb.from("todos").delete().neq("id", -1);
   if (delErr) return cloudError(delErr, "교체(삭제)");
   if (items.length) {
-    const { error: insErr } = await sb.from("todos").insert(items.map(toRow));
+    let { error: insErr } = await sb.from("todos").insert(items.map(toRow));
+    if (insErr && isPriorityColumnError(insErr)) {
+      priorityColumnMissing = true;
+      ({ error: insErr } = await sb.from("todos").insert(items.map(toRow)));
+    }
     if (insErr) return cloudError(insErr, "교체(저장)");
   }
-  syncOk();
+  syncOkOrPriorityWarn();
 }
 
 function persist() {
@@ -207,6 +242,7 @@ async function initData() {
     todos = loadLocal();
   }
   render();
+  checkDeadlineNotifications();
 }
 
 async function login() {
@@ -264,6 +300,13 @@ function setDate() {
 }
 
 function sortByStart(arr) {
+  if (sortMode === "priority") {
+    return [...arr].sort(
+      (a, b) =>
+        PRIO_RANK[a.priority] - PRIO_RANK[b.priority] ||
+        a.endDate.localeCompare(b.endDate)
+    );
+  }
   if (sortMode === "end") {
     return [...arr].sort((a, b) =>
       a.endDate === b.endDate
@@ -495,6 +538,12 @@ function renderItem(todo) {
   const dates = document.createElement("span");
   dates.className = "todo-dates";
   dates.textContent = `${todo.startDate} ~ ${todo.endDate}`;
+  if (todo.priority !== "보통") {
+    const prio = document.createElement("span");
+    prio.className = `prio-chip prio-${todo.priority}`;
+    prio.textContent = todo.priority;
+    dates.prepend(prio);
+  }
   if (isOverdue(todo)) {
     const badge = document.createElement("span");
     badge.className = "overdue-badge";
@@ -580,9 +629,19 @@ function renderEditItem(todo) {
   endField.type = "date";
   endField.value = todo.endDate;
 
+  const priorityField = document.createElement("select");
+  PRIORITIES.forEach((p) => {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p;
+    if (p === todo.priority) opt.selected = true;
+    priorityField.appendChild(opt);
+  });
+
   row.appendChild(projectField);
   row.appendChild(startField);
   row.appendChild(endField);
+  row.appendChild(priorityField);
 
   const memoField = document.createElement("textarea");
   memoField.rows = 2;
@@ -605,6 +664,7 @@ function renderEditItem(todo) {
       memo: memoField.value.trim(),
       startDate: startField.value,
       endDate: endField.value,
+      priority: priorityField.value,
     });
   });
 
@@ -684,6 +744,12 @@ function renderBoard() {
         const dates = document.createElement("div");
         dates.className = "board-card-dates";
         dates.textContent = `${todo.startDate} ~ ${todo.endDate}`;
+        if (todo.priority !== "보통") {
+          const prio = document.createElement("span");
+          prio.className = `prio-chip prio-${todo.priority}`;
+          prio.textContent = todo.priority;
+          dates.prepend(prio);
+        }
         if (isOverdue(todo)) {
           const badge = document.createElement("span");
           badge.className = "overdue-badge";
@@ -1038,6 +1104,56 @@ function attachBarDrag(bar, todo, rangeStart, rangeEnd) {
   bar.addEventListener("pointercancel", finish);
 }
 
+/* ---------- 마감 알림 ---------- */
+
+const NOTIFIED_KEY = "notifiedOn";
+
+function updateNotifyBtn() {
+  if (!("Notification" in window)) {
+    notifyBtn.style.display = "none";
+    return;
+  }
+  if (Notification.permission === "granted") notifyBtn.textContent = "알림 켜짐 ✓";
+  else if (Notification.permission === "denied") notifyBtn.textContent = "알림 차단됨";
+  else notifyBtn.textContent = "알림 켜기";
+}
+
+function checkDeadlineNotifications(force = false) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (!force && localStorage.getItem(NOTIFIED_KEY) === todayStr()) return;
+
+  const overdue = todos.filter(isOverdue).length;
+  const dueToday = todos.filter((t) => dDay(t) === 0).length;
+  const dueTomorrow = todos.filter((t) => dDay(t) === 1).length;
+  if (overdue + dueToday + dueTomorrow === 0) return;
+
+  const parts = [];
+  if (overdue) parts.push(`지연 ${overdue}건`);
+  if (dueToday) parts.push(`오늘 마감 ${dueToday}건`);
+  if (dueTomorrow) parts.push(`내일 마감 ${dueTomorrow}건`);
+  try {
+    new Notification("업무 진행 관리", { body: parts.join(" · ") });
+    localStorage.setItem(NOTIFIED_KEY, todayStr());
+  } catch (e) {
+    console.error("notification", e);
+  }
+}
+
+notifyBtn.addEventListener("click", async () => {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    await Notification.requestPermission();
+  } else if (Notification.permission === "denied") {
+    alert(
+      "브라우저가 이 사이트의 알림을 차단하고 있어요.\n주소창 왼쪽 자물쇠 아이콘 → 알림 → 허용으로 바꿔주세요."
+    );
+  }
+  updateNotifyBtn();
+  checkDeadlineNotifications(true);
+});
+
+setInterval(() => checkDeadlineNotifications(), 30 * 60 * 1000);
+
 /* ---------- 백업 ---------- */
 
 function exportTodos() {
@@ -1096,6 +1212,7 @@ form.addEventListener("submit", (e) => {
     startDate: startInput.value,
     endDate: endInput.value,
     status: statusInput.value,
+    priority: priorityInput.value,
   });
   input.value = "";
   memoInput.value = "";
@@ -1103,6 +1220,7 @@ form.addEventListener("submit", (e) => {
   startInput.value = todayStr();
   endInput.value = todayStr();
   statusInput.value = "예정";
+  priorityInput.value = "보통";
 });
 
 clearCompletedBtn.addEventListener("click", clearCompleted);
@@ -1180,3 +1298,4 @@ if (sb) {
 startInput.value = todayStr();
 endInput.value = todayStr();
 setDate();
+updateNotifyBtn();

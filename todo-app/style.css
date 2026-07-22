@@ -1141,3 +1141,39 @@ body {
   background: var(--color-danger);
   color: #ffffff;
 }
+
+/* ---------- 우선순위 칩 ---------- */
+
+.prio-chip {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.08px;
+  vertical-align: 1px;
+}
+
+.prio-높음 {
+  background: var(--color-ink);
+  color: var(--color-canvas);
+}
+
+.prio-낮음 {
+  border: 1px solid var(--color-hairline);
+  color: var(--color-ink-muted-48);
+}
+
+.edit-row select {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  outline: none;
+}
