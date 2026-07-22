@@ -21,6 +21,47 @@ let editingId = null;
 let searchQuery = "";
 let sortMode = "start";
 
+// 프로젝트별 색상 (애플 시스템 색 기반 8색 팔레트 — 라이트/다크 공용)
+const PROJECT_PALETTE = [
+  "#0066cc", // 파랑
+  "#34c759", // 초록
+  "#ff9500", // 주황
+  "#af52de", // 보라
+  "#ff2d55", // 분홍
+  "#00b8c4", // 청록
+  "#a2845e", // 갈색
+  "#8e8e93", // 회색
+];
+let projectColorMap = {};
+try {
+  projectColorMap = JSON.parse(localStorage.getItem("projectColors") || "{}");
+} catch {
+  projectColorMap = {};
+}
+let colorBy = localStorage.getItem("colorBy") || "status";
+
+function saveProjectColors() {
+  localStorage.setItem("projectColors", JSON.stringify(projectColorMap));
+}
+
+function projectColorIndex(project) {
+  if (projectColorMap[project] == null) {
+    const used = new Set(Object.values(projectColorMap));
+    let idx = 0;
+    while (idx < PROJECT_PALETTE.length && used.has(idx)) idx++;
+    if (idx >= PROJECT_PALETTE.length)
+      idx = Object.keys(projectColorMap).length % PROJECT_PALETTE.length;
+    projectColorMap[project] = idx;
+    saveProjectColors();
+  }
+  return projectColorMap[project];
+}
+
+function projectColor(project) {
+  if (!project) return "var(--color-ink-muted-48)";
+  return PROJECT_PALETTE[projectColorIndex(project)];
+}
+
 const form = document.getElementById("todo-form");
 const input = document.getElementById("todo-input");
 const projectInput = document.getElementById("project-input");
@@ -45,6 +86,8 @@ const boardEl = document.getElementById("board");
 const summaryEl = document.getElementById("summary");
 const searchInput = document.getElementById("search-input");
 const sortSelect = document.getElementById("sort-select");
+const colorbySelect = document.getElementById("colorby-select");
+const projectLegend = document.getElementById("project-legend");
 const priorityInput = document.getElementById("priority-input");
 const recurrenceInput = document.getElementById("recurrence-input");
 const notifyBtn = document.getElementById("notify-btn");
@@ -500,6 +543,7 @@ function getFilteredTodos() {
 
 function render() {
   renderSummary();
+  renderProjectLegend();
   renderList();
   renderBoard();
   renderGantt();
@@ -507,6 +551,82 @@ function render() {
   renderStats();
   updateProjectDatalist();
   updateSwSummary();
+}
+
+/* ---------- 프로젝트 색상 범례/관리 ---------- */
+
+function renderProjectLegend() {
+  projectLegend.innerHTML = "";
+  const projects = getProjects();
+  if (projects.length === 0) {
+    projectLegend.style.display = "none";
+    return;
+  }
+  projectLegend.style.display = "flex";
+
+  const caption = document.createElement("span");
+  caption.className = "legend-caption";
+  caption.textContent = "프로젝트";
+  projectLegend.appendChild(caption);
+
+  projects.forEach((p) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "proj-legend-chip";
+    chip.title = "클릭하면 색상 변경";
+    const dot = document.createElement("span");
+    dot.className = "proj-dot";
+    dot.style.background = projectColor(p);
+    const name = document.createElement("span");
+    name.textContent = p;
+    const count = document.createElement("span");
+    count.className = "proj-legend-count";
+    count.textContent = todos.filter((t) => t.project === p).length;
+    chip.appendChild(dot);
+    chip.appendChild(name);
+    chip.appendChild(count);
+    chip.addEventListener("click", (e) => openColorPicker(p, e.currentTarget));
+    projectLegend.appendChild(chip);
+  });
+}
+
+let colorPickerEl = null;
+
+function openColorPicker(project, anchor) {
+  closeColorPicker();
+  const pop = document.createElement("div");
+  pop.className = "color-picker";
+  PROJECT_PALETTE.forEach((col, idx) => {
+    const sw = document.createElement("button");
+    sw.type = "button";
+    sw.className = "color-swatch" + (projectColorIndex(project) === idx ? " selected" : "");
+    sw.style.background = col;
+    sw.addEventListener("click", () => {
+      projectColorMap[project] = idx;
+      saveProjectColors();
+      closeColorPicker();
+      render();
+    });
+    pop.appendChild(sw);
+  });
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.top = `${r.bottom + window.scrollY + 6}px`;
+  pop.style.left = `${r.left + window.scrollX}px`;
+  colorPickerEl = pop;
+  setTimeout(() => document.addEventListener("click", onDocClickForPicker), 0);
+}
+
+function onDocClickForPicker(e) {
+  if (colorPickerEl && !colorPickerEl.contains(e.target)) closeColorPicker();
+}
+
+function closeColorPicker() {
+  if (colorPickerEl) {
+    colorPickerEl.remove();
+    colorPickerEl = null;
+    document.removeEventListener("click", onDocClickForPicker);
+  }
 }
 
 /* ---------- 요약 대시보드 ---------- */
@@ -588,7 +708,13 @@ function renderList() {
       if (groupName) {
         const header = document.createElement("li");
         header.className = "project-header";
-        header.textContent = groupName;
+        if (groupName !== "기타") {
+          const dot = document.createElement("span");
+          dot.className = "proj-dot";
+          dot.style.background = projectColor(groupName);
+          header.appendChild(dot);
+        }
+        header.appendChild(document.createTextNode(groupName));
         list.appendChild(header);
       }
       items.forEach((todo) => {
@@ -611,6 +737,10 @@ function renderItem(todo) {
     `todo-item status-${todo.status}` +
     (todo.status === "완료" ? " completed" : "") +
     (isOverdue(todo) ? " overdue" : "");
+  if (todo.project) {
+    li.style.borderLeft = `3px solid ${projectColor(todo.project)}`;
+    li.style.paddingLeft = "10px";
+  }
 
   const main = document.createElement("div");
   main.className = "todo-main";
@@ -829,6 +959,9 @@ function renderBoard() {
       items.forEach((todo) => {
         const card = document.createElement("div");
         card.className = "board-card" + (isOverdue(todo) ? " overdue" : "");
+        if (!isOverdue(todo) && todo.project) {
+          card.style.borderLeft = `3px solid ${projectColor(todo.project)}`;
+        }
 
         if (todo.project) {
           const proj = document.createElement("div");
@@ -1106,6 +1239,10 @@ function renderGantt() {
       bar.style.left = `${startIdx * CELL_W}px`;
       bar.style.width = `${dur * CELL_W}px`;
       bar.title = `${todo.text} · ${todo.startDate} ~ ${todo.endDate} (${todo.status})`;
+      if (colorBy === "project" && todo.project) {
+        bar.style.background = projectColor(todo.project);
+        bar.style.opacity = todo.status === "완료" ? "0.5" : "1";
+      }
 
       const hl = document.createElement("div");
       hl.className = "gantt-handle left";
@@ -1365,6 +1502,10 @@ function renderCalendar() {
         `cal-chip status-${t.status}` + (isOverdue(t) ? " overdue" : "");
       chip.textContent = t.text;
       chip.title = `${t.text} (${t.startDate}~${t.endDate} · ${t.status})`;
+      if (colorBy === "project" && t.project) {
+        chip.style.background = projectColor(t.project);
+        if (t.status === "완료") chip.style.opacity = "0.5";
+      }
       cell.appendChild(chip);
     });
     if (dayTodos.length > 3) {
@@ -1788,6 +1929,14 @@ sortSelect.addEventListener("change", () => {
   renderList();
   renderBoard();
   if (currentView === "gantt") renderGantt();
+});
+
+colorbySelect.value = colorBy;
+colorbySelect.addEventListener("change", () => {
+  colorBy = colorbySelect.value;
+  localStorage.setItem("colorBy", colorBy);
+  renderGantt();
+  renderCalendar();
 });
 
 viewTabs.forEach((tab) => {

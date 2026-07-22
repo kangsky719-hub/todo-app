@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=13" />
+<link rel="stylesheet" href="style.css?v=14" />
 </head>
 <body>
   <div class="app">
@@ -112,7 +112,13 @@
         <option value="end">마감일순</option>
         <option value="priority">우선순위순</option>
       </select>
+      <select id="colorby-select" title="간트·캘린더 색상 기준">
+        <option value="status">색: 상태</option>
+        <option value="project">색: 프로젝트</option>
+      </select>
     </div>
+
+    <div id="project-legend" class="project-legend"></div>
 
     <div class="view-tabs">
       <button class="view-tab active" data-view="list">목록</button>
@@ -175,7 +181,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js?v=13"></script>
+  <script src="script.js?v=14"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
