@@ -6,9 +6,10 @@
 - 순수 HTML/CSS/JS (프레임워크 없음), `todo-app/` 폴더에 index.html / style.css / script.js 3개 파일
 
 ## 배포 & 저장소
-- **실서비스 URL**: https://whimsical-belekoy-13392c.netlify.app
-- **GitHub**: https://github.com/kangsky719-hub/todo-app (main 브랜치)
-- **배포 방식**: main에 push하면 Netlify가 자동 재배포 (30초~1분). `netlify.toml`이 publish 디렉토리를 `todo-app`으로 지정
+- **실서비스 URL**: https://kangsky719-hub.github.io/todo-app/ (GitHub Pages)
+- **GitHub**: https://github.com/kangsky719-hub/todo-app (main 브랜치, public)
+- **배포 방식**: main에 push하면 GitHub Actions(`.github/workflows/deploy-pages.yml`)가 `todo-app/` 디렉토리를 Pages로 배포 (약 30초~1분)
+- (구) Netlify https://whimsical-belekoy-13392c.netlify.app — 2026-07-22 무료 크레딧 소진으로 배포 정지되어 GitHub Pages로 이전. 옛 주소는 v=8 상태로 당분간 접속만 가능. `netlify.toml`은 기록용으로 남아 있음
 - 로컬 실행: `python -m http.server 8080 --directory todo-app` (`.claude/launch.json`에 "todo-app" 설정 있음)
 
 ## 데이터 저장 구조
@@ -76,5 +77,5 @@
 ## 알려진 사항
 - 스크린샷 도구: 브라우저 패널이 화면에 표시 중일 때만 작동 — 평소엔 DOM/JS 검증으로 대체
 - Supabase 무료 플랜: 1주일 미사용 시 프로젝트 일시정지될 수 있음 (대시보드에서 재개 가능)
-- **(2026-07-22) Netlify 배포 멈춤**: v=9(칸반 확대)부터 push해도 재배포가 안 됨 (빈 커밋 트리거도 무효). 현재 실서비스는 v=8, 로컬/GitHub은 v=10(대시보드·D-day·검색·정렬 포함). 사용자가 Netlify 대시보드 → Deploys에서 상태 확인 필요. 캐시 버전은 index.html에서 v=N으로 관리
+- 캐시 버전은 index.html에서 `?v=N`으로 관리 — 파일 수정 시 반드시 올릴 것 (현재 v=10). GitHub Pages는 10분 캐시라 버전 갱신 필수
 - 우선순위 필드 추가 시 Supabase에 `alter table todos add column priority text default '보통';` 실행 필요 (제안만 된 상태)
