@@ -88,6 +88,9 @@ const searchInput = document.getElementById("search-input");
 const sortSelect = document.getElementById("sort-select");
 const colorbySelect = document.getElementById("colorby-select");
 const projectLegend = document.getElementById("project-legend");
+const boardKey = document.getElementById("board-key");
+const ganttKey = document.getElementById("gantt-key");
+const calendarKey = document.getElementById("calendar-key");
 const priorityInput = document.getElementById("priority-input");
 const recurrenceInput = document.getElementById("recurrence-input");
 const notifyBtn = document.getElementById("notify-btn");
@@ -544,6 +547,7 @@ function getFilteredTodos() {
 function render() {
   renderSummary();
   renderProjectLegend();
+  renderProjectKeys();
   renderList();
   renderBoard();
   renderGantt();
@@ -590,6 +594,34 @@ function renderProjectLegend() {
   });
 }
 
+// 보드·간트·캘린더 우측 상단 프로젝트 색상 키
+function fillProjectKey(container) {
+  if (!container) return;
+  container.innerHTML = "";
+  const projects = getProjects();
+  if (projects.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+  container.style.display = "flex";
+  projects.forEach((p) => {
+    const item = document.createElement("span");
+    item.className = "proj-key-item";
+    const dot = document.createElement("span");
+    dot.className = "proj-dot";
+    dot.style.background = projectColor(p);
+    item.appendChild(dot);
+    item.appendChild(document.createTextNode(p));
+    container.appendChild(item);
+  });
+}
+
+function renderProjectKeys() {
+  fillProjectKey(boardKey);
+  fillProjectKey(ganttKey);
+  fillProjectKey(calendarKey);
+}
+
 let colorPickerEl = null;
 
 function openColorPicker(project, anchor) {
@@ -611,8 +643,13 @@ function openColorPicker(project, anchor) {
   });
   document.body.appendChild(pop);
   const r = anchor.getBoundingClientRect();
-  pop.style.top = `${r.bottom + window.scrollY + 6}px`;
-  pop.style.left = `${r.left + window.scrollX}px`;
+  const pw = pop.offsetWidth || 160;
+  // 뷰포트 기준 고정 위치 (화면 밖으로 나가지 않게 클램프)
+  let left = r.left;
+  if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+  if (left < 8) left = 8;
+  pop.style.top = `${r.bottom + 6}px`;
+  pop.style.left = `${left}px`;
   colorPickerEl = pop;
   setTimeout(() => document.addEventListener("click", onDocClickForPicker), 0);
 }

@@ -1724,8 +1724,25 @@ body {
   gap: 7px;
 }
 
+.view-proj-key {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 14px;
+  margin-bottom: var(--space-sm);
+}
+
+.proj-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  color: var(--color-ink-muted-80);
+}
+
 .color-picker {
-  position: absolute;
+  position: fixed;
   z-index: 100;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
