@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=9" />
+<link rel="stylesheet" href="style.css?v=10" />
 </head>
 <body>
   <div class="app">
@@ -30,6 +30,8 @@
         <button id="logout-btn" type="button">로그아웃</button>
       </div>
     </div>
+
+    <div id="summary" class="summary"></div>
 
     <form id="todo-form" class="todo-form">
       <input
@@ -64,6 +66,19 @@
       <textarea id="memo-input" rows="2" placeholder="메모 (선택)"></textarea>
       <button type="submit">추가</button>
     </form>
+
+    <div class="toolbar">
+      <input
+        type="search"
+        id="search-input"
+        placeholder="검색 (제목·프로젝트·메모)"
+        autocomplete="off"
+      />
+      <select id="sort-select" title="정렬 기준">
+        <option value="start">시작일순</option>
+        <option value="end">마감일순</option>
+      </select>
+    </div>
 
     <div class="view-tabs">
       <button class="view-tab active" data-view="list">목록</button>
@@ -103,6 +118,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js?v=9"></script>
+  <script src="script.js?v=10"></script>
 </body>
 </html>

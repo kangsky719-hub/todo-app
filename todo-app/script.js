@@ -15,6 +15,8 @@ let todos = [];
 let currentFilter = "all";
 let currentView = "list";
 let editingId = null;
+let searchQuery = "";
+let sortMode = "start";
 
 const form = document.getElementById("todo-form");
 const input = document.getElementById("todo-input");
@@ -37,6 +39,9 @@ const ganttView = document.getElementById("gantt-view");
 const ganttChart = document.getElementById("gantt-chart");
 const boardView = document.getElementById("board-view");
 const boardEl = document.getElementById("board");
+const summaryEl = document.getElementById("summary");
+const searchInput = document.getElementById("search-input");
+const sortSelect = document.getElementById("sort-select");
 const dateEl = document.getElementById("date");
 
 const authEmail = document.getElementById("auth-email");
@@ -259,11 +264,35 @@ function setDate() {
 }
 
 function sortByStart(arr) {
+  if (sortMode === "end") {
+    return [...arr].sort((a, b) =>
+      a.endDate === b.endDate
+        ? a.startDate.localeCompare(b.startDate)
+        : a.endDate.localeCompare(b.endDate)
+    );
+  }
   return [...arr].sort((a, b) =>
     a.startDate === b.startDate
       ? a.endDate.localeCompare(b.endDate)
       : a.startDate.localeCompare(b.startDate)
   );
+}
+
+function applySearch(arr) {
+  if (!searchQuery) return arr;
+  const q = searchQuery.toLowerCase();
+  return arr.filter(
+    (t) =>
+      t.text.toLowerCase().includes(q) ||
+      t.project.toLowerCase().includes(q) ||
+      t.memo.toLowerCase().includes(q)
+  );
+}
+
+function dDay(todo) {
+  // 완료 업무는 D-day 없음. 반환: null | 0(오늘 마감) | 양수(남은 일수) | 음수(지연 일수)
+  if (todo.status === "완료") return null;
+  return diffDays(todayStr(), todo.endDate);
 }
 
 function getProjects() {
@@ -332,16 +361,79 @@ function clearCompleted() {
 }
 
 function getFilteredTodos() {
-  if (currentFilter === "all") return todos;
-  if (currentFilter === "지연") return todos.filter(isOverdue);
-  return todos.filter((t) => t.status === currentFilter);
+  const base = applySearch(todos);
+  if (currentFilter === "all") return base;
+  if (currentFilter === "지연") return base.filter(isOverdue);
+  if (currentFilter === "오늘마감")
+    return base.filter((t) => dDay(t) === 0);
+  if (currentFilter === "임박")
+    return base.filter((t) => {
+      const d = dDay(t);
+      return d !== null && d >= 0 && d <= 3;
+    });
+  return base.filter((t) => t.status === currentFilter);
 }
 
 function render() {
+  renderSummary();
   renderList();
   renderBoard();
   renderGantt();
   updateProjectDatalist();
+}
+
+/* ---------- 요약 대시보드 ---------- */
+
+function setFilter(filter) {
+  currentFilter = filter;
+  filterBtns.forEach((b) =>
+    b.classList.toggle("active", b.dataset.filter === filter)
+  );
+  document.querySelectorAll(".summary-chip").forEach((c) =>
+    c.classList.toggle("active", c.dataset.filter === filter)
+  );
+  renderList();
+}
+
+function renderSummary() {
+  summaryEl.innerHTML = "";
+  const overdue = todos.filter(isOverdue).length;
+  const dueToday = todos.filter((t) => dDay(t) === 0).length;
+  const dueSoon = todos.filter((t) => {
+    const d = dDay(t);
+    return d !== null && d >= 0 && d <= 3;
+  }).length;
+  const inProgress = todos.filter((t) => t.status === "진행중").length;
+
+  const chips = [
+    { label: "지연", value: overdue, filter: "지연", danger: overdue > 0 },
+    { label: "오늘 마감", value: dueToday, filter: "오늘마감", danger: dueToday > 0 },
+    { label: "3일 내 마감", value: dueSoon, filter: "임박", danger: false },
+    { label: "진행중", value: inProgress, filter: "진행중", danger: false },
+  ];
+
+  chips.forEach((c) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className =
+      "summary-chip" +
+      (c.danger ? " danger" : "") +
+      (currentFilter === c.filter ? " active" : "");
+    chip.dataset.filter = c.filter;
+    const num = document.createElement("span");
+    num.className = "summary-num";
+    num.textContent = c.value;
+    const label = document.createElement("span");
+    label.className = "summary-label";
+    label.textContent = c.label;
+    chip.appendChild(num);
+    chip.appendChild(label);
+    chip.addEventListener("click", () => {
+      // 같은 칩을 다시 누르면 전체 보기로 복귀
+      setFilter(currentFilter === c.filter ? "all" : c.filter);
+    });
+    summaryEl.appendChild(chip);
+  });
 }
 
 /* ---------- 목록 뷰 ---------- */
@@ -408,6 +500,14 @@ function renderItem(todo) {
     badge.className = "overdue-badge";
     badge.textContent = "지연";
     dates.appendChild(badge);
+  } else {
+    const d = dDay(todo);
+    if (d !== null && d >= 0 && d <= 7) {
+      const dd = document.createElement("span");
+      dd.className = "dday-badge" + (d === 0 ? " today" : "");
+      dd.textContent = d === 0 ? "오늘 마감" : `D-${d}`;
+      dates.appendChild(dd);
+    }
   }
 
   main.appendChild(text);
@@ -554,7 +654,9 @@ function renderBoard() {
     const cardsWrap = document.createElement("div");
     cardsWrap.className = "board-cards";
 
-    const items = sortByStart(todos.filter((t) => t.status === status));
+    const items = sortByStart(
+      applySearch(todos).filter((t) => t.status === status)
+    );
     count.textContent = items.length;
 
     if (items.length === 0) {
@@ -587,6 +689,14 @@ function renderBoard() {
           badge.className = "overdue-badge";
           badge.textContent = "지연";
           dates.appendChild(badge);
+        } else {
+          const d = dDay(todo);
+          if (d !== null && d >= 0 && d <= 7) {
+            const dd = document.createElement("span");
+            dd.className = "dday-badge" + (d === 0 ? " today" : "");
+            dd.textContent = d === 0 ? "오늘 마감" : `D-${d}`;
+            dates.appendChild(dd);
+          }
         }
         card.appendChild(dates);
 
@@ -672,7 +782,8 @@ function renderGantt() {
   }
   ganttChart.innerHTML = "";
 
-  if (todos.length === 0) {
+  const searched = applySearch(todos);
+  if (searched.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     empty.textContent = "할 일이 없습니다";
@@ -680,7 +791,7 @@ function renderGantt() {
     return;
   }
 
-  const sorted = sortByStart(todos);
+  const sorted = sortByStart(searched);
   const today = todayStr();
   let minD = today;
   let maxD = today;
@@ -1004,11 +1115,22 @@ importFile.addEventListener("change", () => {
 
 filterBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
-    filterBtns.forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    currentFilter = btn.dataset.filter;
-    renderList();
+    setFilter(btn.dataset.filter);
   });
+});
+
+searchInput.addEventListener("input", () => {
+  searchQuery = searchInput.value.trim();
+  renderList();
+  renderBoard();
+  if (currentView === "gantt") renderGantt();
+});
+
+sortSelect.addEventListener("change", () => {
+  sortMode = sortSelect.value;
+  renderList();
+  renderBoard();
+  if (currentView === "gantt") renderGantt();
 });
 
 viewTabs.forEach((tab) => {
