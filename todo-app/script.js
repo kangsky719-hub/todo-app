@@ -40,6 +40,18 @@ try {
 }
 let colorBy = localStorage.getItem("colorBy") || "status";
 
+// 승인 집계 (MES 조회 건수 배치 입력) — 로컬 저장만, 클라우드 전송 안 함
+const APPROVAL_TYPES = ["order", "출하승인", "기타"];
+let approvalLogs = [];
+try {
+  approvalLogs = JSON.parse(localStorage.getItem("approvalLogs") || "[]");
+} catch {
+  approvalLogs = [];
+}
+function saveApprovals() {
+  localStorage.setItem("approvalLogs", JSON.stringify(approvalLogs));
+}
+
 function saveProjectColors() {
   localStorage.setItem("projectColors", JSON.stringify(projectColorMap));
 }
@@ -106,6 +118,12 @@ const calPrev = document.getElementById("cal-prev");
 const calNext = document.getElementById("cal-next");
 const calTodayBtn = document.getElementById("cal-today");
 const statsEl = document.getElementById("stats");
+const approvalView = document.getElementById("approval-view");
+const approvalForm = document.getElementById("approval-form");
+const approvalDate = document.getElementById("approval-date");
+const approvalType = document.getElementById("approval-type");
+const approvalCount = document.getElementById("approval-count");
+const approvalBody = document.getElementById("approval-body");
 const dateEl = document.getElementById("date");
 
 const authEmail = document.getElementById("auth-email");
@@ -1949,6 +1967,127 @@ notifyBtn.addEventListener("click", async () => {
 setInterval(() => checkDeadlineNotifications(), 30 * 60 * 1000);
 registerPeriodicSync();
 
+/* ---------- 승인 집계 ---------- */
+
+function addApproval(date, type, count) {
+  approvalLogs.push({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    date,
+    type,
+    count,
+  });
+  saveApprovals();
+  renderApprovals();
+}
+
+function deleteApproval(id) {
+  approvalLogs = approvalLogs.filter((a) => a.id !== id);
+  saveApprovals();
+  renderApprovals();
+}
+
+function ymOf(dateStr) {
+  return dateStr.slice(0, 7);
+}
+
+function renderApprovals() {
+  approvalBody.innerHTML = "";
+
+  if (approvalLogs.length === 0) {
+    approvalBody.appendChild(
+      el("div", "empty-state", "아직 기록이 없습니다. 위에서 승인 건수를 입력해보세요.")
+    );
+    return;
+  }
+
+  const today = todayStr();
+  const thisYm = ymOf(today);
+  const thisMonday = addDays(
+    today,
+    new Date(today).getUTCDay() === 0 ? -6 : 1 - new Date(today).getUTCDay()
+  );
+
+  // 이번 달 합계 (구분별 + 총)
+  const monthLogs = approvalLogs.filter((a) => ymOf(a.date) === thisYm);
+  const weekLogs = approvalLogs.filter((a) => a.date >= thisMonday && a.date <= today);
+  const sumBy = (logs, type) =>
+    logs.filter((a) => !type || a.type === type).reduce((s, a) => s + a.count, 0);
+
+  const tiles = el("div", "stat-tiles");
+  [
+    ["이번 달 총", sumBy(monthLogs), false],
+    ["order", sumBy(monthLogs, "order"), false],
+    ["출하승인", sumBy(monthLogs, "출하승인"), false],
+    ["이번 주", sumBy(weekLogs), false],
+  ].forEach(([label, value]) => {
+    const tile = el("div", "stat-tile");
+    tile.appendChild(el("div", "stat-value", String(value)));
+    tile.appendChild(el("div", "stat-label", label));
+    tiles.appendChild(tile);
+  });
+  approvalBody.appendChild(tiles);
+
+  // 최근 6개월 막대그래프 (총 건수 기준)
+  const months = [];
+  const base = new Date(today + "T00:00:00Z");
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - i, 1));
+    const ym = d.toISOString().slice(0, 7);
+    months.push({ ym, count: sumBy(approvalLogs.filter((a) => ymOf(a.date) === ym)) });
+  }
+  const maxC = Math.max(1, ...months.map((m) => m.count));
+  const section = el("div", "stat-section");
+  section.appendChild(el("h3", "stat-heading", "최근 6개월 승인 실적"));
+  const chart = el("div", "week-chart");
+  months.forEach((m) => {
+    const col = el("div", "week-col" + (m.ym === thisYm ? " current" : ""));
+    const wrap = el("div", "week-bar-wrap");
+    const bar = el("div", "week-bar");
+    bar.style.height = `${(m.count / maxC) * 100}%`;
+    if (m.count > 0) bar.appendChild(el("span", "week-bar-num", String(m.count)));
+    bar.title = `${m.ym}: ${m.count}건`;
+    wrap.appendChild(bar);
+    col.appendChild(wrap);
+    col.appendChild(el("div", "week-label", m.ym.slice(5) + "월"));
+    chart.appendChild(col);
+  });
+  section.appendChild(chart);
+  approvalBody.appendChild(section);
+
+  // 기록 목록 (최근순)
+  const logSection = el("div", "stat-section");
+  logSection.appendChild(el("h3", "stat-heading", "기록"));
+  [...approvalLogs]
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+    .slice(0, 60)
+    .forEach((a) => {
+      const row = el("div", "approval-log-row");
+      row.appendChild(el("span", "approval-log-date", a.date));
+      row.appendChild(el("span", `approval-log-type type-${a.type}`, a.type));
+      row.appendChild(el("span", "approval-log-count", `${a.count}건`));
+      const del = el("button", "approval-log-del", "×");
+      del.title = "삭제";
+      del.addEventListener("click", () => deleteApproval(a.id));
+      row.appendChild(del);
+      logSection.appendChild(row);
+    });
+  approvalBody.appendChild(logSection);
+}
+
+approvalForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const date = approvalDate.value || todayStr();
+  const type = approvalType.value;
+  const count = parseInt(approvalCount.value, 10);
+  if (!count || count < 1) {
+    approvalCount.focus();
+    return;
+  }
+  addApproval(date, type, count);
+  approvalCount.value = "";
+  approvalCount.focus();
+});
+
 /* ---------- 백업 ---------- */
 
 function exportTodos() {
@@ -2064,9 +2203,11 @@ viewTabs.forEach((tab) => {
     ganttView.classList.toggle("hidden", currentView !== "gantt");
     calendarView.classList.toggle("hidden", currentView !== "calendar");
     statsView.classList.toggle("hidden", currentView !== "stats");
+    approvalView.classList.toggle("hidden", currentView !== "approval");
     if (currentView === "gantt") renderGantt();
     if (currentView === "calendar") renderCalendar();
     if (currentView === "stats") renderStats();
+    if (currentView === "approval") renderApprovals();
   });
 });
 
@@ -2104,5 +2245,6 @@ if (sb) {
 
 startInput.value = todayStr();
 endInput.value = todayStr();
+approvalDate.value = todayStr();
 setDate();
 updateNotifyBtn();

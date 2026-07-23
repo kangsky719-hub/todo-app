@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=16" />
+<link rel="stylesheet" href="style.css?v=17" />
 </head>
 <body>
   <div class="app">
@@ -126,6 +126,7 @@
       <button class="view-tab" data-view="gantt">간트차트</button>
       <button class="view-tab" data-view="calendar">캘린더</button>
       <button class="view-tab" data-view="stats">통계</button>
+      <button class="view-tab" data-view="approval">승인집계</button>
     </div>
 
     <div id="list-view" class="view">
@@ -182,10 +183,36 @@
     <div id="stats-view" class="view hidden">
       <div id="stats" class="stats"></div>
     </div>
+
+    <div id="approval-view" class="view hidden">
+      <form id="approval-form" class="approval-form">
+        <div class="approval-row">
+          <label>
+            날짜
+            <input type="date" id="approval-date" />
+          </label>
+          <label>
+            구분
+            <select id="approval-type">
+              <option value="order">order</option>
+              <option value="출하승인">출하승인</option>
+              <option value="기타">기타</option>
+            </select>
+          </label>
+          <label>
+            건수
+            <input type="number" id="approval-count" min="1" placeholder="예: 32" />
+          </label>
+          <button type="submit">기록</button>
+        </div>
+        <p class="approval-hint">MES 조회 화면에서 본 승인 건수를 입력하세요. 하루 한 번, 또는 주/월 단위로 몰아서 기록해도 됩니다.</p>
+      </form>
+      <div id="approval-body"></div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js?v=16"></script>
+  <script src="script.js?v=17"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {

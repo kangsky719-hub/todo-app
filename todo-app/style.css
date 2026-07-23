@@ -1834,3 +1834,119 @@ body {
   border-left-color: var(--color-ink);
   opacity: 0.6;
 }
+
+/* ---------- 승인 집계 ---------- */
+
+.approval-form {
+  margin-bottom: var(--space-lg);
+}
+
+.approval-row {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.approval-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  color: var(--color-ink-muted-48);
+}
+
+.approval-row input,
+.approval-row select {
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  outline: none;
+}
+
+.approval-row input:focus,
+.approval-row select:focus {
+  border-color: var(--color-primary);
+}
+
+#approval-count {
+  width: 110px;
+}
+
+.approval-row button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: #fff;
+  font-family: var(--font-text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.approval-row button:hover {
+  background: var(--color-primary-focus);
+}
+
+.approval-row button:active {
+  transform: scale(0.95);
+}
+
+.approval-hint {
+  margin: var(--space-xs) 0 0;
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  color: var(--color-ink-muted-48);
+}
+
+.approval-log-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--color-divider-soft);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+}
+
+.approval-log-date {
+  flex: 0 0 auto;
+  color: var(--color-ink-muted-48);
+  font-size: 13px;
+}
+
+.approval-log-type {
+  flex: 1;
+  font-weight: 600;
+}
+
+.approval-log-type.type-order {
+  color: var(--color-primary);
+}
+
+.approval-log-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.approval-log-del {
+  border: none;
+  background: transparent;
+  color: var(--color-ink-muted-48);
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.approval-log-del:hover {
+  color: var(--color-danger);
+}
