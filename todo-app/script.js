@@ -1149,8 +1149,25 @@ function attachCardDrag(card, todo) {
 
 /* ---------- 간트차트 뷰 (노션식 드래그 타임라인) ---------- */
 
-const CELL_W = 32;
+const GANTT_ZOOMS = [16, 24, 32, 44, 60]; // 칸 너비(px) 단계
+let ganttZoomIdx = (() => {
+  const saved = parseInt(localStorage.getItem("ganttZoom"), 10);
+  return saved >= 0 && saved < GANTT_ZOOMS.length ? saved : 2;
+})();
+let CELL_W = GANTT_ZOOMS[ganttZoomIdx];
 let ganttScrollLeft = null;
+
+function setGanttZoom(idx) {
+  if (idx < 0 || idx >= GANTT_ZOOMS.length || idx === ganttZoomIdx) return;
+  const prev = ganttChart.querySelector(".gantt-scroll");
+  const oldW = CELL_W;
+  ganttZoomIdx = idx;
+  CELL_W = GANTT_ZOOMS[idx];
+  localStorage.setItem("ganttZoom", String(idx));
+  // 보고 있던 날짜 위치가 유지되도록 스크롤을 비율로 환산
+  if (prev) ganttScrollLeft = (prev.scrollLeft * CELL_W) / oldW;
+  renderGantt();
+}
 
 function renderGantt() {
   if (currentView === "gantt") {
@@ -1209,7 +1226,29 @@ function renderGantt() {
   hint.className = "gantt-hint";
   hint.textContent = "막대를 끌면 일정 이동 · 양끝을 끌면 기간 조절";
   legend.appendChild(hint);
+
+  // 줌 조절 (− / +)
+  const zoom = document.createElement("span");
+  zoom.className = "gantt-zoom";
+  const zoomOut = document.createElement("button");
+  zoomOut.type = "button";
+  zoomOut.className = "gantt-zoom-btn";
+  zoomOut.textContent = "−";
+  zoomOut.title = "칸 작게";
+  zoomOut.disabled = ganttZoomIdx === 0;
+  zoomOut.addEventListener("click", () => setGanttZoom(ganttZoomIdx - 1));
+  const zoomIn = document.createElement("button");
+  zoomIn.type = "button";
+  zoomIn.className = "gantt-zoom-btn";
+  zoomIn.textContent = "+";
+  zoomIn.title = "칸 크게";
+  zoomIn.disabled = ganttZoomIdx === GANTT_ZOOMS.length - 1;
+  zoomIn.addEventListener("click", () => setGanttZoom(ganttZoomIdx + 1));
+  zoom.appendChild(zoomOut);
+  zoom.appendChild(zoomIn);
+  legend.appendChild(zoom);
   ganttChart.appendChild(legend);
+  ganttChart.style.setProperty("--gantt-cell-w", `${CELL_W}px`);
 
   const scroll = document.createElement("div");
   scroll.className = "gantt-scroll";
@@ -1338,6 +1377,21 @@ function renderGantt() {
       hr.className = "gantt-handle right";
       bar.appendChild(hl);
       bar.appendChild(hr);
+
+      // 막대 위 업무명: 넓으면 안쪽(흰 글씨), 좁으면 오른쪽 바깥(회색)
+      const barW = dur * CELL_W;
+      if (barW >= 56) {
+        const lbl = document.createElement("span");
+        lbl.className = "gantt-bar-label";
+        lbl.textContent = todo.text;
+        bar.appendChild(lbl);
+      } else {
+        const lbl = document.createElement("span");
+        lbl.className = "gantt-bar-label outside";
+        lbl.textContent = todo.text;
+        lbl.style.left = `${startIdx * CELL_W + barW + 6}px`;
+        cells.appendChild(lbl);
+      }
 
       attachBarDrag(bar, todo, rangeStart, rangeEnd);
       cells.appendChild(bar);

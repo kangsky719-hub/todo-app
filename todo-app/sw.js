@@ -1,12 +1,12 @@
 // 업무 진행 관리 서비스 워커
 // 역할: (1) 오프라인 캐시  (2) 백그라운드 마감 알림(주기적 동기화, 지원 브라우저 한정)
 
-const CACHE = "todo-app-v19";
+const CACHE = "todo-app-v20";
 const META_CACHE = "todo-meta";
 const CORE = [
   "./index.html",
-  "./style.css?v=19",
-  "./script.js?v=19",
+  "./style.css?v=20",
+  "./script.js?v=20",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
