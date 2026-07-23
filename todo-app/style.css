@@ -1950,3 +1950,355 @@ body {
 .approval-log-del:hover {
   color: var(--color-danger);
 }
+
+/* ---------- 업무 노트 (일일 업무일지) ---------- */
+
+.note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.note-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.note-nav button,
+#note-print {
+  padding: 6px 12px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  font-size: 13px;
+  letter-spacing: -0.224px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.note-nav button:hover,
+#note-print:hover {
+  border-color: var(--color-primary);
+}
+
+.note-nav button:active,
+#note-print:active {
+  transform: scale(0.95);
+}
+
+#note-today {
+  color: var(--color-primary);
+}
+
+#note-date-pick {
+  padding: 5px 10px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  color: var(--color-ink-muted-80);
+  font-family: var(--font-text);
+  font-size: 13px;
+  outline: none;
+}
+
+.note-hero {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.note-day-num {
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  line-height: 1;
+  color: var(--color-ink);
+}
+
+.note-day-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.note-day-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.374px;
+  color: var(--color-ink);
+}
+
+.note-day-sub {
+  font-size: 13px;
+  letter-spacing: -0.224px;
+  color: var(--color-ink-muted-48);
+}
+
+.note-tasks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  background: var(--color-canvas-parchment);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+}
+
+.note-tasks-head {
+  flex-basis: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.12px;
+  color: var(--color-ink-muted-48);
+}
+
+.note-task-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  font-size: 13px;
+  letter-spacing: -0.224px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.note-task-chip:hover {
+  border-color: var(--color-primary);
+}
+
+.note-task-chip.status-완료 {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.note-task-due {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.note-templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-xs);
+}
+
+.note-tpl-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-ink-muted-80);
+  font-family: var(--font-text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.note-tpl-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.note-tpl-btn:active {
+  transform: scale(0.95);
+}
+
+.note-text {
+  width: 100%;
+  min-height: 320px;
+  padding: var(--space-md) var(--space-md);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  font-size: 15px;
+  line-height: 1.7;
+  letter-spacing: -0.224px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.note-text:focus {
+  border-color: var(--color-primary);
+}
+
+.note-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-xs);
+}
+
+.note-save-status {
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  color: var(--color-ink-muted-48);
+}
+
+.note-actions button {
+  padding: 7px 14px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-primary);
+  font-family: var(--font-text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+
+.note-actions button:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.note-actions button:active {
+  transform: scale(0.95);
+}
+
+.note-hint {
+  margin: var(--space-xs) 0 0;
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  color: var(--color-ink-muted-48);
+}
+
+.note-past {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-hairline);
+}
+
+.note-past-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.note-past-head .stat-heading {
+  margin: 0;
+}
+
+#note-search {
+  padding: 7px 14px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  font-size: 13px;
+  letter-spacing: -0.224px;
+  outline: none;
+  width: 200px;
+  transition: border-color 0.15s;
+}
+
+#note-search:focus {
+  border-color: var(--color-primary);
+}
+
+.note-past-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 9px 4px;
+  border: none;
+  border-bottom: 1px solid var(--color-divider-soft);
+  background: transparent;
+  font-family: var(--font-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.note-past-row:hover {
+  background: var(--color-canvas-parchment);
+}
+
+.note-past-row.current .note-past-date {
+  color: var(--color-primary);
+}
+
+.note-past-date {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.224px;
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.note-past-preview {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  letter-spacing: -0.224px;
+  color: var(--color-ink-muted-48);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 인쇄: 노트 인쇄 영역만 출력 */
+#note-print-area {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #note-print-area,
+  #note-print-area * {
+    visibility: visible;
+  }
+  #note-print-area {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 24px;
+  }
+  #note-print-area h1 {
+    font-size: 20px;
+    margin: 0 0 16px;
+  }
+  #note-print-area pre {
+    font-family: var(--font-text);
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}

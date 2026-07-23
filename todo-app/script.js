@@ -588,6 +588,7 @@ function render() {
   renderGantt();
   renderCalendar();
   renderStats();
+  renderNoteTasks(); // 노트의 '이 날짜의 업무' 스트립 갱신 (textarea는 건드리지 않음)
   updateProjectDatalist();
   updateSwSummary();
 }
@@ -2210,10 +2211,306 @@ approvalForm.addEventListener("submit", (e) => {
   approvalCount.focus();
 });
 
+/* ---------- 업무 노트 (일일 업무일지) ---------- */
+// 노트는 사내 정보가 담길 수 있어 클라우드 전송 없이 이 기기(localStorage)에만 저장.
+// 백업은 푸터의 내보내기/가져오기(JSON)에 포함됨.
+
+const noteView = document.getElementById("note-view");
+const notePrev = document.getElementById("note-prev");
+const noteNext = document.getElementById("note-next");
+const noteTodayBtn = document.getElementById("note-today");
+const noteDatePick = document.getElementById("note-date-pick");
+const notePrintBtn = document.getElementById("note-print");
+const noteDayNum = document.getElementById("note-day-num");
+const noteDayTitle = document.getElementById("note-day-title");
+const noteDaySub = document.getElementById("note-day-sub");
+const noteTasksEl = document.getElementById("note-tasks");
+const noteTemplatesEl = document.getElementById("note-templates");
+const noteText = document.getElementById("note-text");
+const noteSaveStatus = document.getElementById("note-save-status");
+const noteToTaskBtn = document.getElementById("note-to-task");
+const noteSearch = document.getElementById("note-search");
+const notePastList = document.getElementById("note-past-list");
+const notePrintArea = document.getElementById("note-print-area");
+
+let workNotes = {};
+try {
+  workNotes = JSON.parse(localStorage.getItem("workNotes") || "{}");
+} catch {
+  workNotes = {};
+}
+let noteDate = todayStr();
+let noteSaveTimer = null;
+
+function saveNotesToStorage() {
+  localStorage.setItem("workNotes", JSON.stringify(workNotes));
+}
+
+function flushNoteSave() {
+  if (noteSaveTimer) {
+    clearTimeout(noteSaveTimer);
+    noteSaveTimer = null;
+  }
+  const text = noteText.value;
+  if (text.trim() === "") delete workNotes[noteDate];
+  else workNotes[noteDate] = text;
+  saveNotesToStorage();
+}
+
+function markNoteSaved() {
+  const t = new Date().toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  noteSaveStatus.textContent = `저장됨 · ${t}`;
+}
+
+// 제약 제조 현장용 템플릿
+const NOTE_TEMPLATES = [
+  {
+    name: "인수인계",
+    build: (d) =>
+      `[인수인계] ${d}\n■ 생산 현황\n- \n■ 설비 상태\n- \n■ 미결 사항 / 주의\n- \n■ 다음 근무 요청사항\n- `,
+  },
+  {
+    name: "생산일지",
+    build: (d) =>
+      `[생산일지] ${d}\n■ 금일 생산 품목 / 배치\n- \n■ 진행 상황\n- \n■ 특이사항 (일탈·이슈)\n- \n■ 조치 및 결과\n- `,
+  },
+  {
+    name: "회의록",
+    build: (d) =>
+      `[회의록] 제목: \n일시: ${d}  장소: \n참석: \n■ 논의 내용\n- \n■ 결정 사항\n- \n■ 액션 아이템 (담당 / 기한)\n- `,
+  },
+  {
+    name: "이슈기록",
+    build: (d) =>
+      `[이슈] 제목: \n발생: ${d}  공정/설비: \n내용: \n임시조치: \n후속조치 필요: \n관련 보고: `,
+  },
+  {
+    name: "현장순회",
+    build: (d) =>
+      `[현장순회] ${d}\n■ 안전\n- \n■ 품질 / GMP\n- \n■ 5S / 방충방서\n- \n■ 발견사항 → 조치\n- `,
+  },
+];
+
+function renderNoteTemplates() {
+  noteTemplatesEl.innerHTML = "";
+  NOTE_TEMPLATES.forEach((tpl) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "note-tpl-btn";
+    btn.textContent = tpl.name;
+    btn.addEventListener("click", () => {
+      const block = tpl.build(noteDate);
+      noteText.value = noteText.value.trim()
+        ? noteText.value.replace(/\s+$/, "") + "\n\n" + block
+        : block;
+      flushNoteSave();
+      markNoteSaved();
+      noteText.focus();
+      noteText.scrollTop = noteText.scrollHeight;
+    });
+    noteTemplatesEl.appendChild(btn);
+  });
+}
+
+function renderNoteHero() {
+  const d = new Date(noteDate);
+  noteDayNum.textContent = d.getUTCDate();
+  noteDayTitle.textContent = `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 · ${
+    ["일", "월", "화", "수", "목", "금", "토"][d.getUTCDay()]
+  }요일`;
+  const today = todayStr();
+  const diff = diffDays(today, noteDate);
+  let rel;
+  if (diff === 0) rel = "오늘";
+  else if (diff === -1) rel = "어제";
+  else if (diff === 1) rel = "내일";
+  else rel = diff < 0 ? `${-diff}일 전` : `${diff}일 후`;
+  noteDaySub.textContent = `${rel} · ${Math.ceil(d.getUTCDate() / 7)}주차`;
+  noteDatePick.value = noteDate;
+}
+
+// 이 날짜에 걸쳐 있는 업무를 자동으로 보여주는 스트립
+function renderNoteTasks() {
+  if (!noteTasksEl) return;
+  noteTasksEl.innerHTML = "";
+  const dayTodos = sortByStart(
+    todos.filter(
+      (t) => !isUndated(t) && t.startDate <= noteDate && noteDate <= t.endDate
+    )
+  );
+  const head = document.createElement("div");
+  head.className = "note-tasks-head";
+  head.textContent = dayTodos.length
+    ? `이 날짜의 업무 ${dayTodos.length}건`
+    : "이 날짜에 걸린 업무 없음 — 위 빠른 추가로 등록하세요";
+  noteTasksEl.appendChild(head);
+
+  dayTodos.forEach((todo) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `note-task-chip status-${todo.status}`;
+    if (todo.project) {
+      chip.style.borderLeft = `3px solid ${projectColor(todo.project)}`;
+    }
+    const dot = document.createElement("span");
+    dot.className = `legend-dot legend-${todo.status}`;
+    chip.appendChild(dot);
+    chip.appendChild(document.createTextNode(todo.text));
+    if (todo.endDate === noteDate && todo.status !== "완료") {
+      const b = document.createElement("span");
+      b.className = "note-task-due";
+      b.textContent = "마감";
+      chip.appendChild(b);
+    }
+    chip.title = `${todo.text} (${todo.startDate}~${todo.endDate} · ${todo.status}) — 클릭하면 수정`;
+    chip.addEventListener("click", () => {
+      editingId = todo.id;
+      currentView = "list";
+      viewTabs.forEach((t) =>
+        t.classList.toggle("active", t.dataset.view === "list")
+      );
+      document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
+      listView.classList.remove("hidden");
+      renderList();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    noteTasksEl.appendChild(chip);
+  });
+}
+
+function renderPastNotes() {
+  notePastList.innerHTML = "";
+  const q = (noteSearch.value || "").toLowerCase();
+  const dates = Object.keys(workNotes)
+    .filter((d) => !q || workNotes[d].toLowerCase().includes(q))
+    .sort()
+    .reverse()
+    .slice(0, 30);
+  if (dates.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "stat-empty";
+    empty.textContent = q ? "검색 결과가 없습니다" : "저장된 노트가 아직 없습니다";
+    notePastList.appendChild(empty);
+    return;
+  }
+  dates.forEach((d) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "note-past-row" + (d === noteDate ? " current" : "");
+    const dateEl2 = document.createElement("span");
+    dateEl2.className = "note-past-date";
+    dateEl2.textContent = d;
+    const preview = document.createElement("span");
+    preview.className = "note-past-preview";
+    const firstLine =
+      workNotes[d].split("\n").find((l) => l.trim() !== "") || "";
+    preview.textContent = firstLine.slice(0, 60);
+    row.appendChild(dateEl2);
+    row.appendChild(preview);
+    row.addEventListener("click", () => openNote(d));
+    notePastList.appendChild(row);
+  });
+}
+
+function openNote(date) {
+  flushNoteSave(); // 이전 날짜 내용 먼저 저장
+  noteDate = date;
+  noteText.value = workNotes[noteDate] || "";
+  noteSaveStatus.textContent = workNotes[noteDate] ? "저장됨" : "";
+  renderNoteHero();
+  renderNoteTasks();
+  renderPastNotes();
+}
+
+notePrev.addEventListener("click", () => openNote(addDays(noteDate, -1)));
+noteNext.addEventListener("click", () => openNote(addDays(noteDate, 1)));
+noteTodayBtn.addEventListener("click", () => openNote(todayStr()));
+noteDatePick.addEventListener("change", () => {
+  if (noteDatePick.value) openNote(noteDatePick.value);
+});
+
+noteText.addEventListener("input", () => {
+  if (noteSaveTimer) clearTimeout(noteSaveTimer);
+  noteSaveStatus.textContent = "입력 중…";
+  noteSaveTimer = setTimeout(() => {
+    flushNoteSave();
+    markNoteSaved();
+    renderPastNotes();
+  }, 600);
+});
+
+noteSearch.addEventListener("input", renderPastNotes);
+
+// 노트에서 선택한 문장 → 할 일 (자연어 파서 재사용, 날짜 없으면 노트 날짜로)
+noteToTaskBtn.addEventListener("click", () => {
+  const sel = noteText.value
+    .substring(noteText.selectionStart, noteText.selectionEnd)
+    .split("\n")
+    .map((l) => l.replace(/^[-•■\s\[\]]+/, "").trim())
+    .find((l) => l !== "");
+  if (!sel) {
+    alert("노트에서 할 일로 만들 문장을 드래그로 선택한 뒤 눌러주세요.");
+    return;
+  }
+  const p = parseQuickInput(sel);
+  if (!p) return;
+  if (!p.endDate) {
+    p.startDate = noteDate;
+    p.endDate = noteDate;
+  }
+  addTodo({
+    text: p.text,
+    project: p.project,
+    memo: `${noteDate} 노트에서 추가`,
+    startDate: p.startDate,
+    endDate: p.endDate,
+    status: "예정",
+    priority: p.priority,
+    recurrence: p.recurrence,
+  });
+  noteSaveStatus.textContent = `✓ 할 일 추가됨: ${p.text}`;
+});
+
+// 인쇄: 노트 내용만 담은 인쇄 영역을 채우고 print
+notePrintBtn.addEventListener("click", () => {
+  flushNoteSave();
+  const d = new Date(noteDate);
+  const dayTodos = sortByStart(
+    todos.filter(
+      (t) => !isUndated(t) && t.startDate <= noteDate && noteDate <= t.endDate
+    )
+  );
+  const taskLines = dayTodos
+    .map((t) => `· [${t.status}] ${t.text}${t.project ? ` (${t.project})` : ""}`)
+    .join("\n");
+  notePrintArea.innerHTML = "";
+  const h = document.createElement("h1");
+  h.textContent = `업무 노트 — ${noteDate} (${["일", "월", "화", "수", "목", "금", "토"][d.getUTCDay()]})`;
+  const pre = document.createElement("pre");
+  pre.textContent =
+    (taskLines ? `[이 날짜의 업무]\n${taskLines}\n\n` : "") +
+    (workNotes[noteDate] || "(작성된 노트 없음)");
+  notePrintArea.appendChild(h);
+  notePrintArea.appendChild(pre);
+  window.print();
+});
+
+renderNoteTemplates();
+
 /* ---------- 백업 ---------- */
 
 function exportTodos() {
-  const blob = new Blob([JSON.stringify(todos, null, 2)], {
+  const payload = {
+    app: "todo-app",
+    exportedAt: new Date().toISOString(),
+    todos,
+    workNotes,
+    approvalLogs,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
@@ -2229,16 +2526,29 @@ function importTodos(file) {
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      if (!Array.isArray(data)) throw new Error("형식 오류");
+      // 신형식({todos, workNotes, approvalLogs}) / 구형식(배열) 모두 지원
+      const list = Array.isArray(data) ? data : data.todos;
+      if (!Array.isArray(list)) throw new Error("형식 오류");
       if (
         todos.length > 0 &&
-        !confirm(`현재 ${todos.length}개 항목을 백업 파일(${data.length}개)로 교체할까요?`)
+        !confirm(`현재 ${todos.length}개 항목을 백업 파일(${list.length}개)로 교체할까요?`)
       )
         return;
-      todos = data.map(normalizeTodo);
+      todos = list.map(normalizeTodo);
       persist();
+      if (!Array.isArray(data)) {
+        if (data.workNotes && typeof data.workNotes === "object") {
+          workNotes = data.workNotes;
+          saveNotesToStorage();
+        }
+        if (Array.isArray(data.approvalLogs)) {
+          approvalLogs = data.approvalLogs;
+          saveApprovals();
+        }
+      }
       if (session) cloudReplaceAll(todos);
       render();
+      openNote(noteDate);
     } catch {
       alert("올바른 백업 파일이 아닙니다.");
     }
@@ -2326,10 +2636,12 @@ viewTabs.forEach((tab) => {
     calendarView.classList.toggle("hidden", currentView !== "calendar");
     statsView.classList.toggle("hidden", currentView !== "stats");
     approvalView.classList.toggle("hidden", currentView !== "approval");
+    noteView.classList.toggle("hidden", currentView !== "note");
     if (currentView === "gantt") renderGantt();
     if (currentView === "calendar") renderCalendar();
     if (currentView === "stats") renderStats();
     if (currentView === "approval") renderApprovals();
+    if (currentView === "note") openNote(noteDate);
   });
 });
 

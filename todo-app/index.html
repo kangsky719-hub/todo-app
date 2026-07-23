@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=18" />
+<link rel="stylesheet" href="style.css?v=19" />
 </head>
 <body>
   <div class="app">
@@ -122,6 +122,7 @@
 
     <div class="view-tabs">
       <button class="view-tab active" data-view="list">목록</button>
+      <button class="view-tab" data-view="note">노트</button>
       <button class="view-tab" data-view="board">보드</button>
       <button class="view-tab" data-view="gantt">간트차트</button>
       <button class="view-tab" data-view="calendar">캘린더</button>
@@ -151,6 +152,55 @@
         <input type="file" id="import-file" accept=".json,application/json" hidden />
       </footer>
     </div>
+
+    <div id="note-view" class="view hidden">
+      <div class="note-header">
+        <div class="note-nav">
+          <button id="note-prev" type="button" title="이전 날">◀</button>
+          <button id="note-today" type="button">오늘</button>
+          <button id="note-next" type="button" title="다음 날">▶</button>
+          <input type="date" id="note-date-pick" title="날짜 선택" />
+        </div>
+        <button id="note-print" type="button" title="이 노트 인쇄">인쇄</button>
+      </div>
+
+      <div class="note-hero">
+        <span id="note-day-num" class="note-day-num"></span>
+        <div class="note-day-meta">
+          <span id="note-day-title" class="note-day-title"></span>
+          <span id="note-day-sub" class="note-day-sub"></span>
+        </div>
+      </div>
+
+      <div id="note-tasks" class="note-tasks"></div>
+
+      <div class="note-templates" id="note-templates"></div>
+
+      <textarea
+        id="note-text"
+        class="note-text"
+        placeholder="오늘의 업무 기록을 남겨보세요.&#10;위 템플릿 버튼을 누르면 인수인계·생산일지·회의록 양식이 채워집니다."
+        rows="14"
+      ></textarea>
+
+      <div class="note-footer">
+        <span id="note-save-status" class="note-save-status"></span>
+        <span class="note-actions">
+          <button id="note-to-task" type="button" title="노트에서 드래그로 선택한 문장을 할 일로 등록">선택한 문장 → 할 일</button>
+        </span>
+      </div>
+      <p class="note-hint">노트는 이 기기에만 저장됩니다 (클라우드 전송 안 함). 푸터의 내보내기 백업에는 포함돼요.</p>
+
+      <div class="note-past">
+        <div class="note-past-head">
+          <h3 class="stat-heading">지난 노트</h3>
+          <input type="search" id="note-search" placeholder="노트 내용 검색" autocomplete="off" />
+        </div>
+        <div id="note-past-list"></div>
+      </div>
+    </div>
+
+    <div id="note-print-area" aria-hidden="true"></div>
 
     <div id="board-view" class="view hidden">
       <div id="board-key" class="view-proj-key"></div>
@@ -212,7 +262,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js?v=18"></script>
+  <script src="script.js?v=19"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
