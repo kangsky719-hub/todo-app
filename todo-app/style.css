@@ -1772,3 +1772,65 @@ body {
   border-color: var(--color-ink);
   box-shadow: 0 0 0 2px var(--color-canvas), 0 0 0 4px var(--color-ink);
 }
+
+/* ---------- 기간 미정 ---------- */
+
+.todo-dates.undated,
+.board-card-dates.undated {
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.undated-section {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px dashed var(--color-hairline);
+}
+
+.undated-head {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.12px;
+  color: var(--color-ink-muted-48);
+  margin-bottom: var(--space-xs);
+}
+
+.undated-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.undated-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-hairline);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  font-size: 13px;
+  letter-spacing: -0.224px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.undated-chip:hover {
+  border-color: var(--color-primary);
+}
+
+.undated-chip.status-예정 {
+  border-left-color: var(--color-ink-muted-48);
+}
+
+.undated-chip.status-진행중 {
+  border-left-color: var(--color-primary);
+}
+
+.undated-chip.status-완료 {
+  border-left-color: var(--color-ink);
+  opacity: 0.6;
+}

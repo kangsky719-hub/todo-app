@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=15" />
+<link rel="stylesheet" href="style.css?v=16" />
 </head>
 <body>
   <div class="app">
@@ -62,12 +62,12 @@
           <datalist id="project-list"></datalist>
         </label>
         <label>
-          시작일
-          <input type="date" id="start-input" required />
+          시작일 (선택)
+          <input type="date" id="start-input" />
         </label>
         <label>
-          종료일
-          <input type="date" id="end-input" required />
+          종료일 (선택)
+          <input type="date" id="end-input" />
         </label>
         <label>
           상태
@@ -176,6 +176,7 @@
         <div id="calendar-grid" class="cal-grid"></div>
       </div>
       <p class="cal-hint">빈 날짜를 클릭하면 그 날짜로 새 업무를 추가할 수 있어요</p>
+      <div id="calendar-undated"></div>
     </div>
 
     <div id="stats-view" class="view hidden">
@@ -184,7 +185,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="script.js?v=15"></script>
+  <script src="script.js?v=16"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {

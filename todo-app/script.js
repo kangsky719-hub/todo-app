@@ -120,18 +120,28 @@ const authUser = document.getElementById("auth-user");
 /* ---------- 데이터 유틸 ---------- */
 
 function normalizeTodo(t) {
+  // 날짜 정규화: 둘 다 비면 '기간 미정', 한쪽만 있으면 나머지를 채움, 뒤집히면 보정
+  let s = t.startDate || "";
+  let e = t.endDate || "";
+  if (s && e && e < s) e = s;
+  if (s && !e) e = s;
+  if (e && !s) s = e;
   return {
     id: t.id || Date.now() + Math.floor(Math.random() * 1000),
     text: t.text || "",
     memo: t.memo || "",
     project: t.project || "",
-    startDate: t.startDate || todayStr(),
-    endDate: t.endDate || t.startDate || todayStr(),
+    startDate: s,
+    endDate: e,
     status: STATUSES.includes(t.status) ? t.status : t.completed ? "완료" : "예정",
     priority: PRIORITIES.includes(t.priority) ? t.priority : "보통",
     recurrence: RECURRENCES.includes(t.recurrence) ? t.recurrence : "없음",
     completedAt: t.completedAt || (t.status === "완료" ? t.completedAt || "" : ""),
   };
+}
+
+function isUndated(t) {
+  return !t.endDate;
 }
 
 function fromRow(r) {
@@ -140,8 +150,8 @@ function fromRow(r) {
     text: r.text,
     memo: r.memo || "",
     project: r.project || "",
-    startDate: r.start_date,
-    endDate: r.end_date,
+    startDate: r.start_date || "",
+    endDate: r.end_date || "",
     status: r.status,
     priority: PRIORITIES.includes(r.priority) ? r.priority : "보통",
     recurrence: RECURRENCES.includes(r.recurrence) ? r.recurrence : "없음",
@@ -164,10 +174,10 @@ function toRow(t) {
     text: t.text,
     memo: t.memo,
     project: t.project,
-    start_date: t.startDate,
-    end_date: t.endDate,
     status: t.status,
   };
+  row.start_date = t.startDate || null;
+  row.end_date = t.endDate || null;
   if (!missingCols.has("priority")) row.priority = t.priority;
   if (!missingCols.has("recurrence")) row.recurrence = t.recurrence;
   if (!missingCols.has("completedAt")) row.completed_at = t.completedAt || null;
@@ -228,6 +238,14 @@ function syncOk() {
 
 function cloudError(error, action) {
   console.error(action, error);
+  const msg = error.message || "";
+  if (/null value|not-null/i.test(msg) && /start_date|end_date/i.test(msg)) {
+    setSync(
+      "기간 미정 업무는 클라우드 저장 전 SQL 필요 (날짜 컬럼 NULL 허용). 로컬에는 저장됨",
+      true
+    );
+    return;
+  }
   setSync(`${action} 실패: ${error.message}`, true);
 }
 
@@ -370,7 +388,7 @@ function diffDays(a, b) {
 }
 
 function isOverdue(todo) {
-  return todo.status !== "완료" && todo.endDate < todayStr();
+  return !isUndated(todo) && todo.status !== "완료" && todo.endDate < todayStr();
 }
 
 function setDate() {
@@ -383,24 +401,31 @@ function setDate() {
 }
 
 function sortByStart(arr) {
+  // 기간 미정 업무는 항상 맨 뒤로
+  const byUndated = (a, b) => (isUndated(a) ? 1 : 0) - (isUndated(b) ? 1 : 0);
   if (sortMode === "priority") {
     return [...arr].sort(
       (a, b) =>
+        byUndated(a, b) ||
         PRIO_RANK[a.priority] - PRIO_RANK[b.priority] ||
         a.endDate.localeCompare(b.endDate)
     );
   }
   if (sortMode === "end") {
-    return [...arr].sort((a, b) =>
-      a.endDate === b.endDate
-        ? a.startDate.localeCompare(b.startDate)
-        : a.endDate.localeCompare(b.endDate)
+    return [...arr].sort(
+      (a, b) =>
+        byUndated(a, b) ||
+        (a.endDate === b.endDate
+          ? a.startDate.localeCompare(b.startDate)
+          : a.endDate.localeCompare(b.endDate))
     );
   }
-  return [...arr].sort((a, b) =>
-    a.startDate === b.startDate
-      ? a.endDate.localeCompare(b.endDate)
-      : a.startDate.localeCompare(b.startDate)
+  return [...arr].sort(
+    (a, b) =>
+      byUndated(a, b) ||
+      (a.startDate === b.startDate
+        ? a.endDate.localeCompare(b.endDate)
+        : a.startDate.localeCompare(b.startDate))
   );
 }
 
@@ -416,8 +441,8 @@ function applySearch(arr) {
 }
 
 function dDay(todo) {
-  // 완료 업무는 D-day 없음. 반환: null | 0(오늘 마감) | 양수(남은 일수) | 음수(지연 일수)
-  if (todo.status === "완료") return null;
+  // 완료·미정 업무는 D-day 없음. 반환: null | 0(오늘 마감) | 양수(남은 일수) | 음수(지연 일수)
+  if (todo.status === "완료" || isUndated(todo)) return null;
   return diffDays(todayStr(), todo.endDate);
 }
 
@@ -437,11 +462,7 @@ function updateProjectDatalist() {
 /* ---------- 데이터 조작 ---------- */
 
 function addTodo(data) {
-  const todo = normalizeTodo({
-    id: Date.now(),
-    ...data,
-    endDate: data.endDate < data.startDate ? data.startDate : data.endDate,
-  });
+  const todo = normalizeTodo({ id: Date.now(), ...data });
   todos.push(todo);
   if (loadingCloud) pendingAdds.add(todo.id);
   persist();
@@ -452,11 +473,7 @@ function addTodo(data) {
 function updateTodo(id, data) {
   const idx = todos.findIndex((t) => t.id === id);
   if (idx === -1) return;
-  todos[idx] = normalizeTodo({
-    ...todos[idx],
-    ...data,
-    endDate: data.endDate < data.startDate ? data.startDate : data.endDate,
-  });
+  todos[idx] = normalizeTodo({ ...todos[idx], ...data });
   persist();
   if (session) cloudUpdate(todos[idx]);
   render();
@@ -793,8 +810,10 @@ function renderItem(todo) {
   }
 
   const dates = document.createElement("span");
-  dates.className = "todo-dates";
-  dates.textContent = `${todo.startDate} ~ ${todo.endDate}`;
+  dates.className = "todo-dates" + (isUndated(todo) ? " undated" : "");
+  dates.textContent = isUndated(todo)
+    ? "기간 미정"
+    : `${todo.startDate} ~ ${todo.endDate}`;
   if (todo.priority !== "보통") {
     const prio = document.createElement("span");
     prio.className = `prio-chip prio-${todo.priority}`;
@@ -1013,8 +1032,10 @@ function renderBoard() {
         card.appendChild(title);
 
         const dates = document.createElement("div");
-        dates.className = "board-card-dates";
-        dates.textContent = `${todo.startDate} ~ ${todo.endDate}`;
+        dates.className = "board-card-dates" + (isUndated(todo) ? " undated" : "");
+        dates.textContent = isUndated(todo)
+          ? "기간 미정"
+          : `${todo.startDate} ~ ${todo.endDate}`;
         if (todo.priority !== "보통") {
           const prio = document.createElement("span");
           prio.className = `prio-chip prio-${todo.priority}`;
@@ -1128,14 +1149,25 @@ function renderGantt() {
     return;
   }
 
-  const sorted = sortByStart(searched);
+  const datedTodos = searched.filter((t) => !isUndated(t));
+  const undatedTodos = searched.filter(isUndated);
+
+  if (datedTodos.length === 0) {
+    // 날짜 있는 업무가 없으면 타임라인은 생략하고 미정 모음만
+    appendUndatedSection(ganttChart, undatedTodos);
+    return;
+  }
+
+  const sorted = sortByStart(datedTodos);
   const today = todayStr();
-  let minD = today;
-  let maxD = today;
+  let minD = null;
+  let maxD = null;
   sorted.forEach((t) => {
-    if (t.startDate < minD) minD = t.startDate;
-    if (t.endDate > maxD) maxD = t.endDate;
+    if (minD === null || t.startDate < minD) minD = t.startDate;
+    if (maxD === null || t.endDate > maxD) maxD = t.endDate;
   });
+  if (minD > today) minD = today;
+  if (maxD < today) maxD = today;
   const rangeStart = addDays(minD, -3);
   const rangeEnd = addDays(maxD, 7);
   const nDays = diffDays(rangeStart, rangeEnd) + 1;
@@ -1303,6 +1335,48 @@ function renderGantt() {
         ? ganttScrollLeft
         : Math.max(0, (diffDays(rangeStart, today) - 3) * CELL_W);
   }
+
+  appendUndatedSection(ganttChart, undatedTodos);
+}
+
+// 기간 미정 업무 모음 (간트·캘린더 공용) — 칩 클릭 시 상세 폼으로 날짜 지정 유도
+function appendUndatedSection(container, items) {
+  if (!items || items.length === 0) return;
+  const sec = document.createElement("div");
+  sec.className = "undated-section";
+  const head = document.createElement("div");
+  head.className = "undated-head";
+  head.textContent = `기간 미정 (${items.length})`;
+  sec.appendChild(head);
+  const wrap = document.createElement("div");
+  wrap.className = "undated-chips";
+  items.forEach((todo) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `undated-chip status-${todo.status}`;
+    if (todo.project) {
+      const dot = document.createElement("span");
+      dot.className = "proj-dot";
+      dot.style.background = projectColor(todo.project);
+      chip.appendChild(dot);
+    }
+    chip.appendChild(document.createTextNode(todo.text));
+    chip.title = "클릭하면 날짜를 지정할 수 있어요";
+    chip.addEventListener("click", () => {
+      editingId = todo.id;
+      currentView = "list";
+      viewTabs.forEach((t) =>
+        t.classList.toggle("active", t.dataset.view === "list")
+      );
+      document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
+      listView.classList.remove("hidden");
+      renderList();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    wrap.appendChild(chip);
+  });
+  sec.appendChild(wrap);
+  container.appendChild(sec);
 }
 
 function attachBarDrag(bar, todo, rangeStart, rangeEnd) {
@@ -1391,9 +1465,9 @@ function parseQuickInput(raw) {
     project: "",
     priority: "보통",
     recurrence: "없음",
-    startDate: today,
-    endDate: today,
-    dateLabel: "오늘",
+    startDate: "",
+    endDate: "",
+    dateLabel: "기간 미정",
   };
 
   text = text.replace(/#(\S+)/, (_, p) => {
@@ -1453,6 +1527,7 @@ function parseQuickInput(raw) {
   }
 
   if (dateFound && dateFound >= today) {
+    out.startDate = dateFound;
     out.endDate = dateFound;
     out.dateLabel = label;
   }
@@ -1470,7 +1545,7 @@ function updateQuickPreview() {
   quickPreview.classList.remove("hidden");
   const parts = [`"${p.text}"`];
   if (p.project) parts.push(`프로젝트 ${p.project}`);
-  parts.push(`마감 ${p.endDate} (${p.dateLabel})`);
+  parts.push(p.endDate ? `마감 ${p.endDate} (${p.dateLabel})` : "기간 미정");
   if (p.priority !== "보통") parts.push(`우선순위 ${p.priority}`);
   if (p.recurrence !== "없음") parts.push(`반복 ${p.recurrence}`);
   quickPreview.textContent = "→ " + parts.join(" · ");
@@ -1562,6 +1637,12 @@ function renderCalendar() {
     });
 
     calGrid.appendChild(cell);
+  }
+
+  const undatedBox = document.getElementById("calendar-undated");
+  if (undatedBox) {
+    undatedBox.innerHTML = "";
+    appendUndatedSection(undatedBox, searched.filter(isUndated));
   }
 }
 
@@ -1915,10 +1996,7 @@ form.addEventListener("submit", (e) => {
     return;
   }
   input.placeholder = "할 일을 입력하세요";
-  if (!startInput.value || !endInput.value) {
-    alert("시작일과 종료일을 선택해주세요.");
-    return;
-  }
+  // 날짜는 선택 사항 — 비워두면 '기간 미정'으로 저장됨
   addTodo({
     text,
     project: projectInput.value.trim(),
