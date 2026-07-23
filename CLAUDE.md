@@ -43,6 +43,7 @@
 13. **완료일 기록**: completedAt(status→완료 시 오늘 날짜, 되돌리면 삭제). 주간 그래프 집계에 사용. 이 기능 추가 이전 완료건은 completedAt이 없어 그래프에 안 잡힘
 14. **PWA**: manifest.webmanifest + sw.js(오프라인 캐시, 네트워크 우선). 홈 화면 설치 가능. 아이콘 icon-192/512/maskable-512.png(PIL로 생성, Action Blue+체크). 알림은 앱이 열려 있을 때 확실히 작동하고, 닫힌 상태 알림은 periodicSync(설치된 PWA + Chrome/Edge 한정, best-effort)로 시도 — SW가 caches 'todo-meta'/__summary 읽어 알림. 완전 보장하는 닫힌앱 푸시는 백엔드(Supabase Edge Function + Web Push) 필요, 미구현. **sw.js 수정 시 CACHE 이름(todo-app-vN)과 CORE의 ?v=N도 함께 올릴 것**
 15. **프로젝트 색상 카테고리**: 프로젝트마다 8색 팔레트(애플 시스템 색) 자동 배정, localStorage `projectColors`에 인덱스 저장(클라우드 아님, 표시 전용). 툴바 범례 칩 클릭 → 색상 피커 팝오버(position:fixed)로 변경. 목록 그룹헤더 색점·항목 좌측 색띠, 보드 카드 좌측 색띠(지연이면 빨강 우선), 간트 바·캘린더 칩은 툴바 "색: 상태/프로젝트" 토글(localStorage `colorBy`)로 전환. 보드·간트·캘린더 우측 상단에 프로젝트 색상 키(#board-key/#gantt-key/#calendar-key)
+17. **승인 집계 탭**: MES(harmMES) 조회 건수를 배치 입력(날짜/구분 order·출하승인·기타/건수). 이번 달·이번 주·구분별 합계 타일, 최근 6개월 막대그래프, 기록 목록(삭제). **localStorage `approvalLogs`에만 저장 — 클라우드 전송 안 함**. 배경: 사용자가 GMP MES에서 월 500+ 승인, 자동 카운팅(유저스크립트 주입)은 GMP 밸리데이션·사내 데이터 외부유출 문제로 부적합 판단 → MES 감사추적/조회 건수를 수동 배치 입력하는 방식으로 대체. **MES에 스크립트 주입하는 자동화는 QA/IT 승인 없이 진행 금지**
 16. **기간 미정 업무**: 날짜는 선택 사항. 둘 다 비면 미정(isUndated=!endDate), 한쪽만 입력하면 나머지 자동 채움. 빠른 추가는 날짜 언급 없으면 미정. 목록엔 "기간 미정"+맨아래 정렬, 보드는 정상, 간트/캘린더는 타임라인 제외하고 "기간 미정" 모음(appendUndatedSection, 칩 클릭 시 목록 수정폼으로 이동). 지연·D-day 계산에서 제외. toRow가 빈 날짜를 null로 보냄 — DB start_date/end_date NULL 허용 필요(아래 SQL)
 4. **인증 바**: 이메일/비밀번호 로그인·회원가입·로그아웃 (supabase-js v2 CDN), 동기화 상태/오류가 sync-status에 항상 표시됨
 5. **캐시 버스팅**: index.html에서 `style.css?v=N`, `script.js?v=N` — **파일 수정 시 반드시 v 번호를 올려야 함** (현재 v=8). netlify.toml에 no-cache 헤더 설정됨
@@ -87,7 +88,7 @@
 ## 알려진 사항
 - 스크린샷 도구: 브라우저 패널이 화면에 표시 중일 때만 작동 — 평소엔 DOM/JS 검증으로 대체
 - Supabase 무료 플랜: 1주일 미사용 시 프로젝트 일시정지될 수 있음 (대시보드에서 재개 가능)
-- 캐시 버전은 index.html에서 `?v=N`으로 관리 — 파일 수정 시 반드시 올릴 것 (현재 v=16). sw.js의 CACHE 이름·CORE 목록도 함께 갱신. GitHub Pages는 10분 캐시라 버전 갱신 필수
+- 캐시 버전은 index.html에서 `?v=N`으로 관리 — 파일 수정 시 반드시 올릴 것 (현재 v=17). sw.js의 CACHE 이름·CORE 목록도 함께 갱신. GitHub Pages는 10분 캐시라 버전 갱신 필수
 - **기간 미정 클라우드 저장용 DB 변경**: 사용자가 Supabase SQL Editor에서 아래 실행해야 미정 업무가 클라우드에 저장됨. 미실행 시 미정 업무는 로컬에만 저장되고 sync-status에 안내 표시(cloudError에서 not-null 감지). 실행 여부 미확인 시 사용자에게 확인할 것
   ```sql
   alter table public.todos alter column start_date drop not null;
