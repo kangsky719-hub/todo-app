@@ -1474,10 +1474,119 @@ function attachBarDrag(bar, todo, rangeStart, rangeEnd) {
 /* ---------- 자연어 빠른 추가 ---------- */
 
 const DOW_MAP = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
+// 한글 기간 표현 → 일수
+const KO_DURATION = {
+  하루: 1, 이틀: 2, 사흘: 3, 나흘: 4, 닷새: 5, 엿새: 6,
+  이레: 7, 여드레: 8, 아흐레: 9, 열흘: 10, 보름: 15,
+  일주일: 7, 한주: 7, 두주: 14, 한달: 30, 두달: 60,
+};
+
+function addMonths(dateStr, n) {
+  const d = new Date(dateStr);
+  d.setUTCMonth(d.getUTCMonth() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function lastDayOfMonth(dateStr) {
+  const d = new Date(dateStr);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
+    .toISOString()
+    .slice(0, 10);
+}
+
+// 텍스트에서 첫 날짜 표현을 찾아 { date, matched, label } 반환 (없으면 null)
+function resolveDateToken(text, today) {
+  const y = Number(today.slice(0, 10).slice(0, 4));
+  let m;
+
+  // 오늘/내일/모레/글피
+  m = text.match(/(오늘|내일|모레|글피)/);
+  if (m) {
+    const off = { 오늘: 0, 내일: 1, 모레: 2, 글피: 3 }[m[1]];
+    return { date: addDays(today, off), matched: m[0], label: m[1] };
+  }
+
+  // N일 후/뒤, N주 후/뒤, N개월(달) 후/뒤
+  m = text.match(/(\d+)\s*(일|주|개월|달)\s*(후|뒤)/);
+  if (m) {
+    const n = Number(m[1]);
+    let date;
+    if (m[2] === "일") date = addDays(today, n);
+    else if (m[2] === "주") date = addDays(today, n * 7);
+    else date = addMonths(today, n);
+    return { date, matched: m[0], label: m[0] };
+  }
+
+  // (이번주/다음주/다다음주) X요일
+  m = text.match(/(이번\s*주|다음\s*주|다다음\s*주)?\s*([일월화수목금토])요일/);
+  if (m) {
+    const dow = new Date(today).getUTCDay();
+    const target = DOW_MAP[m[2]];
+    let diff;
+    const week = (m[1] || "").replace(/\s/g, "");
+    if (week === "다음주") {
+      const toNextMon = ((1 - dow + 7) % 7) || 7;
+      diff = toNextMon + ((target - 1 + 7) % 7);
+    } else if (week === "다다음주") {
+      const toNextMon = ((1 - dow + 7) % 7) || 7;
+      diff = toNextMon + 7 + ((target - 1 + 7) % 7);
+    } else {
+      diff = (target - dow + 7) % 7; // 이번주/생략: 가장 가까운 (오늘 포함)
+    }
+    const prefix = week ? week + " " : "";
+    return { date: addDays(today, diff), matched: m[0], label: prefix + m[2] + "요일" };
+  }
+
+  // 이번달/다음달 + 초/말(일)
+  m = text.match(/(이번\s*달|다음\s*달)\s*(초|말|말일)?/);
+  if (m) {
+    const base = m[1].replace(/\s/g, "") === "다음달" ? addMonths(today, 1) : today;
+    const first = base.slice(0, 8) + "01";
+    let date, label;
+    if (m[2] === "초") {
+      date = first;
+      label = m[1].replace(/\s/g, "") + " 초";
+    } else {
+      date = lastDayOfMonth(base);
+      label = m[1].replace(/\s/g, "") + " 말";
+    }
+    return { date, matched: m[0], label };
+  }
+
+  // M월 D일 / M/D
+  m = text.match(/(\d{1,2})\s*[\/월]\s*(\d{1,2})\s*일?/);
+  if (m) {
+    const mm = String(m[1]).padStart(2, "0");
+    const dd = String(m[2]).padStart(2, "0");
+    let date = `${y}-${mm}-${dd}`;
+    // 한 달 이상 지난 날짜만 내년으로 (며칠 전이면 올해로 유지)
+    if (date < today && diffDays(date, today) > 31) date = `${y + 1}-${mm}-${dd}`;
+    return { date, matched: m[0], label: `${Number(m[1])}/${Number(m[2])}` };
+  }
+
+  return null;
+}
+
+// 텍스트에서 소요 기간(일수) 표현을 찾아 { days, matched } 반환
+function resolveDuration(text) {
+  // 숫자: N일(간/동안/짜리/걸리는), N주, N개월/달
+  let m = text.match(/(\d+)\s*(일|주|개월|달)\s*(간|동안|짜리|걸리는|소요)?/);
+  if (m) {
+    const n = Number(m[1]);
+    if (m[2] === "일") return { days: n, matched: m[0] };
+    if (m[2] === "주") return { days: n * 7, matched: m[0] };
+    return { days: n * 30, matched: m[0] }; // 개월/달 ≈ 30일
+  }
+  // 한글: 이틀/사흘/일주일/보름 등 (+ 선택적 간/동안/짜리/걸리는)
+  const koKeys = Object.keys(KO_DURATION).join("|");
+  m = text.match(new RegExp(`(${koKeys})\\s*(간|동안|짜리|걸리는|소요)?`));
+  if (m) return { days: KO_DURATION[m[1]], matched: m[0] };
+  return null;
+}
 
 function parseQuickInput(raw) {
-  let text = raw.trim();
-  if (!text) return null;
+  let text = " " + raw.trim() + " ";
+  if (!raw.trim()) return null;
   const today = todayStr();
   const out = {
     project: "",
@@ -1488,66 +1597,79 @@ function parseQuickInput(raw) {
     dateLabel: "기간 미정",
   };
 
+  // 1) 프로젝트 (#이름)
   text = text.replace(/#(\S+)/, (_, p) => {
     out.project = p;
-    return "";
+    return " ";
   });
-  text = text.replace(/!(높음|보통|낮음)/, (_, p) => {
-    out.priority = p;
-    return "";
-  });
-  // 반복: "매일/매주/매월" 또는 "*매주" 형태
+
+  // 2) 우선순위 — !높음 / 자연어(긴급·급함·중요 → 높음, 사소·천천히 → 낮음)
+  let pm = text.match(/!(높음|보통|낮음)/);
+  if (pm) {
+    out.priority = pm[1];
+    text = text.replace(pm[0], " ");
+  } else if (/긴급|급함|급한|급하게|중요|최우선|ASAP/i.test(text)) {
+    out.priority = "높음";
+    text = text.replace(/긴급히?|급함|급한|급하게|중요한?|최우선|ASAP/gi, " ");
+  } else if (/사소|천천히|나중에|여유/.test(text)) {
+    out.priority = "낮음";
+    text = text.replace(/사소한?|천천히|나중에|여유롭게|여유있게/g, " ");
+  }
+
+  // 3) 반복 (매일/매주/매월). "매주 화요일"이면 요일은 4)에서 날짜로 처리됨
   let rm = text.match(/\*?(매일|매주|매월)/);
   if (rm) {
     out.recurrence = rm[1];
-    text = text.replace(rm[0], "");
+    text = text.replace(rm[0], " ");
   }
 
-  let dateFound = null;
-  let label = "";
+  // 4) 날짜: 먼저 범위(A~B, A부터 B까지)를 시도, 없으면 단일 날짜 + 소요기간
+  let handled = false;
 
-  // "7/25", "7월 25일" 형식
-  let m = text.match(/(\d{1,2})\s*[\/월]\s*(\d{1,2})\s*일?\s*(까지)?/);
-  if (m) {
-    const y = Number(today.slice(0, 4));
-    dateFound = `${y}-${String(m[1]).padStart(2, "0")}-${String(m[2]).padStart(2, "0")}`;
-    label = `${Number(m[1])}/${Number(m[2])}`;
-    text = text.replace(m[0], "");
-  }
-  // 오늘/내일/모레
-  if (!dateFound) {
-    m = text.match(/(오늘|내일|모레)\s*(까지)?/);
-    if (m) {
-      const offs = { 오늘: 0, 내일: 1, 모레: 2 };
-      dateFound = addDays(today, offs[m[1]]);
-      label = m[1];
-      text = text.replace(m[0], "");
+  // 4a) 범위: "A ~ B" / "A - B" / "A 부터 B 까지" / "A 에서 B"
+  const rangeSplit = text.split(/\s*(?:~|—|-|부터|에서)\s*/);
+  if (rangeSplit.length >= 2) {
+    // 앞 조각의 마지막 날짜 = 시작, 뒤 조각의 첫 날짜 = 종료
+    const left = resolveDateToken(rangeSplit[0], today);
+    const rightText = rangeSplit.slice(1).join(" ");
+    // 종료 요일/날짜는 시작일 기준으로 해석 (예: 월요일부터 금요일 = 그 주의 금요일)
+    const right = resolveDateToken(rightText, left ? left.date : today);
+    if (left && right) {
+      let s = left.date, e = right.date;
+      if (e < s) e = s;
+      out.startDate = s;
+      out.endDate = e;
+      out.dateLabel = `${left.label} ~ ${right.label}`;
+      text = text.replace(left.matched, " ").replace(right.matched, " ");
+      // 남은 연결어·구분자 정리 (공백으로 둘러싸인 것만 → 제목 훼손 방지)
+      text = text.replace(/\s(?:부터|까지|에서)(?=\s)/g, " ").replace(/\s*[~—-]\s*/g, " ");
+      handled = true;
     }
   }
-  // (다음주) X요일
-  if (!dateFound) {
-    m = text.match(/(다음\s*주\s*)?([일월화수목금토])요일\s*(까지)?/);
-    if (m) {
-      const dow = new Date(today).getUTCDay();
-      let diff;
-      if (m[1]) {
-        // 다음주 X요일 = 다음 주(월요일 시작)의 해당 요일
-        const toNextMonday = ((1 - dow + 7) % 7) || 7;
-        diff = toNextMonday + ((DOW_MAP[m[2]] - 1 + 7) % 7);
-      } else {
-        // 가장 가까운 X요일 (오늘 포함)
-        diff = (DOW_MAP[m[2]] - dow + 7) % 7;
+
+  // 4b) 단일 날짜 (+ 소요기간)
+  if (!handled) {
+    const d = resolveDateToken(text, today);
+    if (d) text = text.replace(d.matched, " "); // 날짜 먼저 제거 → "3주 후"가 기간으로 오인식되지 않음
+    const dur = resolveDuration(text); // 날짜 제거 후 남은 텍스트에서 기간 탐색
+    if (d) {
+      out.startDate = d.date;
+      out.endDate = d.date;
+      out.dateLabel = d.label;
+      if (dur) {
+        out.endDate = addDays(d.date, dur.days - 1);
+        out.dateLabel = `${d.label}부터 ${dur.days}일`;
+        text = text.replace(dur.matched, " ");
       }
-      dateFound = addDays(today, diff);
-      label = (m[1] ? "다음주 " : "") + m[2] + "요일";
-      text = text.replace(m[0], "");
+      // 날짜 자리 옆에 남은 연결어만 정리 (공백 경계)
+      text = text.replace(/\s(?:부터|까지|에서)(?=\s|$)/g, " ");
+    } else if (dur) {
+      // 날짜 없이 기간만 → 오늘부터 시작
+      out.startDate = today;
+      out.endDate = addDays(today, dur.days - 1);
+      out.dateLabel = `오늘부터 ${dur.days}일`;
+      text = text.replace(dur.matched, " ");
     }
-  }
-
-  if (dateFound && dateFound >= today) {
-    out.startDate = dateFound;
-    out.endDate = dateFound;
-    out.dateLabel = label;
   }
 
   out.text = text.replace(/\s+/g, " ").trim();
